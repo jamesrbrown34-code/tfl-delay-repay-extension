@@ -74,3 +74,7 @@ If no eligible data is found on the active page, the popup falls back to mock da
   - This happens when the active tab has no injected content script yet (for example a `chrome://` page, extension page, or a non-matching URL).
   - Open `https://oyster.tfl.gov.uk/` and reload the extension from `chrome://extensions`, then refresh the tab.
   - The popup now automatically falls back to `data/mockJourneys.json` when page messaging is unavailable.
+
+
+- Use **Test mode** in the popup to force analysis from `data/mockJourneys.json` regardless of the active tab.
+- Use **Load Last 7 Days (Submit)** to click Oyster's `#date-range-button` automatically before analysis.

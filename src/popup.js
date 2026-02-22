@@ -3,6 +3,8 @@ import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 import { buildBatchSnippet } from './utils/claimSnippet.js';
 
 const analyseButton = document.getElementById('analyseButton');
+const last7DaysButton = document.getElementById('last7DaysButton');
+const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
@@ -12,6 +14,7 @@ const adBanner = document.getElementById('adBanner');
 const exportPdfButton = document.getElementById('exportPdfButton');
 
 let currentEligible = [];
+let testModeEnabled = false;
 
 function renderJourneys(journeys) {
   journeysList.innerHTML = '';
@@ -53,7 +56,23 @@ async function loadMockJourneys() {
   };
 }
 
+async function requestLast7DaysRefresh() {
+  const tab = await getActiveTfLTab();
+  if (!tab?.id) return { ok: false };
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'LOAD_LAST_7_DAYS' });
+    return response?.ok ? response : { ok: false };
+  } catch (_error) {
+    return { ok: false };
+  }
+}
+
 async function analyseFromPage() {
+  if (testModeEnabled) {
+    return loadMockJourneys();
+  }
+
   const tab = await getActiveTfLTab();
   if (!tab?.id) {
     return loadMockJourneys();
@@ -74,7 +93,10 @@ async function analyseFromPage() {
 
 async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-  const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true };
+  const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false };
+
+  testModeEnabled = Boolean(settings.testMode);
+  testModeToggle.checked = testModeEnabled;
 
   autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
   autoDetectToggle.disabled = !settings.isPaidTier;
@@ -82,6 +104,15 @@ async function refreshSettings() {
   adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
   exportPdfButton.disabled = !settings.isPaidTier;
 }
+
+last7DaysButton.addEventListener('click', async () => {
+  const result = await requestLast7DaysRefresh();
+  if (result.ok) {
+    summaryBox.innerHTML = '<p>Submitted date range on Oyster page. Now click Analyse Delays.</p>';
+  } else {
+    summaryBox.innerHTML = '<p>Could not click Submit on this tab. Open Oyster journey history page and try again.</p>';
+  }
+});
 
 analyseButton.addEventListener('click', async () => {
   try {
@@ -92,11 +123,19 @@ analyseButton.addEventListener('click', async () => {
     claimSnippet.value = buildBatchSnippet(currentEligible);
 
     if (usedMockData) {
-      summaryBox.innerHTML += '<p>Using local mock data because the page analyser was unavailable.</p>';
+      summaryBox.innerHTML += '<p>Using local mock data (test mode or page analyser unavailable).</p>';
     }
   } catch (error) {
     summaryBox.innerHTML = `<p>Analysis failed: ${error.message}</p>`;
   }
+});
+
+testModeToggle.addEventListener('change', async () => {
+  testModeEnabled = testModeToggle.checked;
+  await chrome.runtime.sendMessage({
+    type: 'UPDATE_SETTINGS',
+    payload: { testMode: testModeEnabled }
+  });
 });
 
 autoDetectToggle.addEventListener('change', async () => {

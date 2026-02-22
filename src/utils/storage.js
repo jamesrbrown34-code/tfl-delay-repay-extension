@@ -2,6 +2,7 @@ const DEFAULT_SETTINGS = {
   isPaidTier: false,
   autoDetectOnLoad: false,
   showAds: true,
+  testMode: false,
   monthlyTracking: {}
 };
 

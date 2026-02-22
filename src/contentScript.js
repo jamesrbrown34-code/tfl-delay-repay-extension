@@ -74,6 +74,17 @@ function isTfLJourneyHistoryPage() {
   return onTfLDomain && /(journey-history|journeyhistory|journeys|history)/i.test(url);
 }
 
+
+function clickLast7DaysSubmitButton() {
+  const submitButton = document.querySelector('#date-range-button');
+  if (!submitButton) {
+    return false;
+  }
+
+  submitButton.click();
+  return true;
+}
+
 async function analyseJourneyTable() {
   const parsedJourneys = parseJourneyRows();
   const eligibleJourneys = getEligibleJourneys(parsedJourneys);
@@ -97,6 +108,11 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   if (message?.type === 'PING_PAGE_STATUS') {
     sendResponse({ ok: true, isJourneyHistory: isTfLJourneyHistoryPage() });
+  }
+
+  if (message?.type === 'LOAD_LAST_7_DAYS') {
+    const clicked = clickLast7DaysSubmitButton();
+    sendResponse({ ok: clicked });
   }
 
   return undefined;
