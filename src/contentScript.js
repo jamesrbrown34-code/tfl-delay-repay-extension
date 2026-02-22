@@ -189,7 +189,7 @@ function getReadableWorkflowStage(stage = '') {
   const mapping = {
     'card-selection': 'Selecting Oyster card',
     'journey-details': 'Filling journey details',
-    'refund-type-selected': 'Selecting refund type',
+    'refund-type-selected': 'Final step: click Submit for a valid claim',
     submitted: 'Submitting request',
     completed: 'Completed'
   };
@@ -629,7 +629,7 @@ async function runServiceDelayAutofill() {
   }
 
   if (inRefundTypeStep) {
-    updateStatusPanel(getReadableWorkflowStage('refund-type-selected'), 'Selecting refund to card option.');
+    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
     await fillRefundTypeStep(sdrAutofillState);
     return;
   }
