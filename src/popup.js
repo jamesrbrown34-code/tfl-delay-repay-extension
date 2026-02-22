@@ -1,6 +1,5 @@
 import { getEligibleJourneys } from './utils/delayEngine.js';
 import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
-import { buildBatchSnippet } from './utils/claimSnippet.js';
 
 const analyseButton = document.getElementById('analyseButton');
 const submitRefundsButton = document.getElementById('submitRefundsButton');
@@ -9,10 +8,7 @@ const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
-const claimSnippet = document.getElementById('claimSnippet');
-const copyButton = document.getElementById('copyButton');
 const adBanner = document.getElementById('adBanner');
-const exportPdfButton = document.getElementById('exportPdfButton');
 
 let currentEligible = [];
 let testModeEnabled = false;
@@ -139,7 +135,6 @@ async function refreshSettings() {
   autoDetectToggle.disabled = !settings.isPaidTier;
 
   adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
-  exportPdfButton.disabled = !settings.isPaidTier;
 }
 
 
@@ -174,7 +169,6 @@ analyseButton.addEventListener('click', async () => {
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
     renderSummary(currentEligible);
-    claimSnippet.value = buildBatchSnippet(currentEligible);
 
     if (usedBatchData) {
       summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled 28-day collection.</p>';
@@ -200,31 +194,6 @@ autoDetectToggle.addEventListener('change', async () => {
   await chrome.runtime.sendMessage({
     type: 'UPDATE_SETTINGS',
     payload: { autoDetectOnLoad: autoDetectToggle.checked }
-  });
-});
-
-copyButton.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(claimSnippet.value || '');
-  copyButton.textContent = 'Copied!';
-  setTimeout(() => {
-    copyButton.textContent = 'Copy Snippet';
-  }, 1200);
-});
-
-exportPdfButton.addEventListener('click', () => {
-  const data = {
-    generatedAt: new Date().toISOString(),
-    journeys: currentEligible,
-    totalRefundEstimate: estimateTotalRefund(currentEligible)
-  };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  chrome.downloads.download({
-    url,
-    filename: 'tfl-delay-claim-summary.json',
-    saveAs: true
   });
 });
 
