@@ -1,0 +1,8 @@
+{
+  "name": "tfl-delay-repay-extension",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}
