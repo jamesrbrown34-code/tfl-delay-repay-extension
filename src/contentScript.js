@@ -383,13 +383,12 @@ function getFirstOysterCardOption(select) {
 }
 
 
+function getOysterCardTypeRadio() {
+  return document.querySelector('#oysterCardType') || document.querySelector('input[name="cardType"][value="OYSTER"]');
+}
+
 function getCardSelectionSelect() {
-  return (
-    document.querySelector('#oysterCardId') ||
-    document.querySelector('#oysterCardType') ||
-    document.querySelector('select[name="oysterCardId"]') ||
-    document.querySelector('select[name="oysterCardType"]')
-  );
+  return document.querySelector('#oysterCardId') || document.querySelector('select[name="oysterCardId"]');
 }
 
 function calculateDelayWithBuffer(delayMinutes) {
@@ -437,17 +436,23 @@ function findFinalSubmitButton() {
 }
 
 async function fillCardSelectionStep(state, settings) {
-  const cardSelect = getCardSelectionSelect();
-  if (!cardSelect) return false;
+  const oysterCardTypeRadio = getOysterCardTypeRadio();
+  if (oysterCardTypeRadio && !oysterCardTypeRadio.checked) {
+    oysterCardTypeRadio.click();
+    oysterCardTypeRadio.dispatchEvent(new Event('change', { bubbles: true }));
+  }
 
-  const preferredCardId = settings?.serviceDelayCardId;
-  if (preferredCardId) {
-    setSelectValue(cardSelect, preferredCardId);
-  } else if (!cardSelect.value) {
-    const firstCard = getFirstOysterCardOption(cardSelect);
-    if (firstCard) {
-      cardSelect.value = firstCard.value;
-      cardSelect.dispatchEvent(new Event('change', { bubbles: true }));
+  const cardSelect = getCardSelectionSelect();
+  if (cardSelect) {
+    const preferredCardId = settings?.serviceDelayCardId;
+    if (preferredCardId) {
+      setSelectValue(cardSelect, preferredCardId);
+    } else if (!cardSelect.value) {
+      const firstCard = getFirstOysterCardOption(cardSelect);
+      if (firstCard) {
+        cardSelect.value = firstCard.value;
+        cardSelect.dispatchEvent(new Event('change', { bubbles: true }));
+      }
     }
   }
 
@@ -683,7 +688,7 @@ async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
   if (!sdrAutofillState?.active) return;
 
-  const inCardSelection = Boolean(getCardSelectionSelect());
+  const inCardSelection = Boolean(getOysterCardTypeRadio() || getCardSelectionSelect());
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
   const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
   const inFinalSubmitStep = Boolean(findFinalSubmitButton());
