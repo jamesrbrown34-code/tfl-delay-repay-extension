@@ -307,7 +307,7 @@ function findNextButtonByText(labelText) {
   });
 }
 
-function clickButtonWithTestModeGuard(button, settings, fallbackMessage) {
+function clickFinalSubmitWithTestModeGuard(button, settings, fallbackMessage) {
   if (!button) return { ok: false, error: fallbackMessage };
 
   if (settings?.testMode) {
@@ -316,6 +316,16 @@ function clickButtonWithTestModeGuard(button, settings, fallbackMessage) {
 
   setTimeout(() => button.click(), 250);
   return { ok: true, requiresManualClick: false };
+}
+
+function findFinalSubmitButton() {
+  const byValue = document.querySelector('button[type="submit"][value="Submit"],input[type="submit"][value="Submit"]');
+  if (byValue) return byValue;
+
+  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
+    const text = (element.textContent || element.value || '').toLowerCase().trim();
+    return text === 'submit';
+  }) || null;
 }
 
 async function fillCardSelectionStep(state, settings) {
@@ -343,8 +353,8 @@ async function fillCardSelectionStep(state, settings) {
     }
   });
 
-  const clickResult = clickButtonWithTestModeGuard(nextPageButton, settings, 'Next page button not available.');
-  return clickResult.ok;
+  setTimeout(() => nextPageButton.click(), 250);
+  return true;
 }
 
 function fillJourneyDetailsForm(journey, settings) {
@@ -413,12 +423,12 @@ async function fillJourneyDetailsStep(state) {
     }
   });
 
-  const clickResult = clickButtonWithTestModeGuard(nextPageButton, settings, 'Next Page button was not found on journey details form.');
+  setTimeout(() => nextPageButton.click(), 250);
   return {
-    ok: clickResult.ok,
+    ok: true,
     submitted: journey,
     remaining: remaining.length,
-    requiresManualClick: clickResult.requiresManualClick
+    requiresManualClick: false
   };
 }
 
@@ -443,6 +453,23 @@ async function fillRefundTypeStep(state) {
   return { ok: true, selected: 'FUL' };
 }
 
+async function fillFinalSubmitStep(state, settings) {
+  const finalSubmitButton = findFinalSubmitButton();
+  if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
+
+  const clickResult = clickFinalSubmitWithTestModeGuard(finalSubmitButton, settings, 'Final Submit button was not found.');
+
+  await chrome.storage.local.set({
+    [CLAIM_AUTOFILL_STORAGE_KEY]: {
+      ...state,
+      stage: clickResult.requiresManualClick ? 'awaiting-final-submit' : 'submitted',
+      finalSubmitAttemptedAt: new Date().toISOString()
+    }
+  });
+
+  return { ok: clickResult.ok, requiresManualClick: clickResult.requiresManualClick };
+}
+
 async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
   if (!sdrAutofillState?.active) return;
@@ -450,6 +477,7 @@ async function runServiceDelayAutofill() {
   const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
   const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
+  const inFinalSubmitStep = Boolean(findFinalSubmitButton());
 
   if (inCardSelection) {
     await fillCardSelectionStep(sdrAutofillState, settings);
@@ -463,6 +491,11 @@ async function runServiceDelayAutofill() {
 
   if (inRefundTypeStep) {
     await fillRefundTypeStep(sdrAutofillState);
+    return;
+  }
+
+  if (inFinalSubmitStep) {
+    await fillFinalSubmitStep(sdrAutofillState, settings);
   }
 }
 
@@ -544,10 +577,7 @@ async function processBatchStateAfterLoad() {
   select.value = nextValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const { settings } = await chrome.storage.local.get('settings');
-  if (!settings?.testMode) {
-    setTimeout(() => submitButton.click(), 300);
-  }
+  setTimeout(() => submitButton.click(), 300);
 }
 
 async function startCollectLast28Days() {
@@ -579,12 +609,9 @@ async function startCollectLast28Days() {
   select.value = firstValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const { settings } = await chrome.storage.local.get('settings');
-  if (!settings?.testMode) {
-    setTimeout(() => submitButton.click(), 300);
-  }
+  setTimeout(() => submitButton.click(), 300);
 
-  return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: Boolean(settings?.testMode) };
+  return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: false };
 }
 
 async function analyseJourneyTable() {
