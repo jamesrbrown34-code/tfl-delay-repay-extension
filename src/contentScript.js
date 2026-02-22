@@ -382,6 +382,16 @@ function getFirstOysterCardOption(select) {
   return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
 }
 
+
+function getCardSelectionSelect() {
+  return (
+    document.querySelector('#oysterCardId') ||
+    document.querySelector('#oysterCardType') ||
+    document.querySelector('select[name="oysterCardId"]') ||
+    document.querySelector('select[name="oysterCardType"]')
+  );
+}
+
 function calculateDelayWithBuffer(delayMinutes) {
   const totalMinutes = Math.max(0, Number(delayMinutes) || 0) + CLAIM_AUTOFILL_BUFFER_MINUTES;
   const hours = Math.min(3, Math.floor(totalMinutes / 60));
@@ -427,7 +437,7 @@ function findFinalSubmitButton() {
 }
 
 async function fillCardSelectionStep(state, settings) {
-  const cardSelect = document.querySelector('#oysterCardId');
+  const cardSelect = getCardSelectionSelect();
   if (!cardSelect) return false;
 
   const preferredCardId = settings?.serviceDelayCardId;
@@ -673,7 +683,7 @@ async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
   if (!sdrAutofillState?.active) return;
 
-  const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
+  const inCardSelection = Boolean(getCardSelectionSelect());
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
   const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
   const inFinalSubmitStep = Boolean(findFinalSubmitButton());
