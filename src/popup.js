@@ -39,6 +39,26 @@ function renderSummary(journeys) {
   summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible journeys · Estimated total refund: <strong>£${total}</strong></p>`;
 }
 
+function renderWorkflowTracker(state) {
+  if (!state) return;
+
+  const completed = state.completed || [];
+  const queue = state.queue || [];
+  const expectedValue = estimateTotalRefund(completed).toFixed(2);
+
+  const tracker = document.createElement('div');
+  tracker.innerHTML = `
+    <p><strong>Refund tracker</strong>: ${completed.length} requested, ${queue.length} remaining.</p>
+    <p>Expected value requested so far: <strong>£${expectedValue}</strong></p>
+  `;
+
+  if (state.stage === 'completed' || (!state.active && completed.length)) {
+    tracker.innerHTML += `<p><strong>Finished:</strong> ${completed.length} journeys requested, expected value is £${expectedValue}.</p>`;
+  }
+
+  summaryBox.appendChild(tracker);
+}
+
 async function getActiveTfLTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
   return tabs[0];
@@ -137,6 +157,12 @@ async function refreshSettings() {
   adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
 }
 
+async function refreshWorkflowTracker() {
+  const { sdrAutofillState } = await chrome.storage.local.get('sdrAutofillState');
+  if (!sdrAutofillState) return;
+  renderWorkflowTracker(sdrAutofillState);
+}
+
 
 submitRefundsButton.addEventListener('click', async () => {
   if (!currentEligible.length) {
@@ -152,6 +178,8 @@ submitRefundsButton.addEventListener('click', async () => {
   } else {
     summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;
   }
+
+  await refreshWorkflowTracker();
 });
 
 collect28DaysButton.addEventListener('click', async () => {
@@ -177,6 +205,8 @@ analyseButton.addEventListener('click', async () => {
     if (usedMockData) {
       summaryBox.innerHTML += '<p>Using local mock data (test mode or page analyser unavailable).</p>';
     }
+
+    await refreshWorkflowTracker();
   } catch (error) {
     summaryBox.innerHTML = `<p>Analysis failed: ${error.message}</p>`;
   }
@@ -198,3 +228,4 @@ autoDetectToggle.addEventListener('change', async () => {
 });
 
 refreshSettings();
+refreshWorkflowTracker();

@@ -2,6 +2,7 @@ const CLAIM_WINDOW_DAYS = 28;
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
+const PENDING_COLLECT_STORAGE_KEY = 'pendingCollectFromMyCards';
 const CONCESSION_KEYWORDS = [
   'freedom pass',
   '60+ oyster',
@@ -170,6 +171,18 @@ function isTfLJourneyHistoryPage() {
   const onTfLDomain = host === 'oyster.tfl.gov.uk' || host.endsWith('.tfl.gov.uk');
 
   return onTfLDomain && /(journey-history|journeyhistory|journeys|history)/i.test(url);
+}
+
+function isMyOysterCardsPage() {
+  const heading = document.querySelector('h1');
+  const headingText = (heading?.textContent || '').trim().toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  return headingText === 'my oyster cards' || path.includes('/myoystercards');
+}
+
+function isExpectedTfLPage() {
+  const path = window.location.pathname.toLowerCase();
+  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || path.includes('/oyster/sdr');
 }
 
 function parseOptionRange(optionValue) {
@@ -542,7 +555,9 @@ async function fillFinalSubmitStep(state, settings) {
     });
 
     if (hasRemainingJourneys) {
-      const serviceDelayLink = document.querySelector('#navSDR');
+      const serviceDelayLink =
+        document.querySelector('a[href*="/oyster/sdr.do"]') ||
+        document.querySelector('#navSDR');
       if (serviceDelayLink) {
         setTimeout(() => serviceDelayLink.click(), 250);
       }
@@ -673,6 +688,23 @@ async function processBatchStateAfterLoad() {
 }
 
 async function startCollectLast28Days() {
+  if (isMyOysterCardsPage()) {
+    const journeyHistoryLink = document.querySelector('a[href*="journeyHistoryThrottle.do"]');
+    if (!journeyHistoryLink) {
+      return { ok: false, error: 'View journey history link not found on My Oyster cards page.' };
+    }
+
+    await chrome.storage.local.set({
+      [PENDING_COLLECT_STORAGE_KEY]: {
+        active: true,
+        startedAt: new Date().toISOString()
+      }
+    });
+
+    setTimeout(() => journeyHistoryLink.click(), 200);
+    return { ok: true, redirected: true, requiresManualClick: false };
+  }
+
   const select = document.querySelector('#date-range');
   const submitButton = document.querySelector('#date-range-button');
 
@@ -704,6 +736,48 @@ async function startCollectLast28Days() {
   setTimeout(() => submitButton.click(), 300);
 
   return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: false };
+}
+
+async function startCollectFromPendingNavigation() {
+  const { pendingCollectFromMyCards } = await chrome.storage.local.get(PENDING_COLLECT_STORAGE_KEY);
+  if (!pendingCollectFromMyCards?.active) return;
+  if (!isTfLJourneyHistoryPage()) return;
+
+  const select = document.querySelector('#date-range');
+  const submitButton = document.querySelector('#date-range-button');
+  if (!select || !submitButton) return;
+
+  await chrome.storage.local.remove(PENDING_COLLECT_STORAGE_KEY);
+  await startCollectLast28Days();
+}
+
+function injectTfLHelperPanel() {
+  if (!isExpectedTfLPage()) return;
+  if (document.querySelector('#tfl-delay-helper-panel')) return;
+
+  const panel = document.createElement('button');
+  panel.id = 'tfl-delay-helper-panel';
+  panel.textContent = 'TfL Delay Assistant active';
+  panel.title = 'Open the extension to collect/analyse journeys.';
+  panel.style.position = 'fixed';
+  panel.style.top = '16px';
+  panel.style.right = '16px';
+  panel.style.zIndex = '2147483647';
+  panel.style.background = '#0f766e';
+  panel.style.color = '#fff';
+  panel.style.border = 'none';
+  panel.style.borderRadius = '999px';
+  panel.style.padding = '8px 12px';
+  panel.style.fontSize = '12px';
+  panel.style.cursor = 'pointer';
+  panel.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
+  panel.addEventListener('click', () => {
+    panel.textContent = 'Use extension icon to open controls';
+    setTimeout(() => {
+      panel.textContent = 'TfL Delay Assistant active';
+    }, 1800);
+  });
+  document.body.appendChild(panel);
 }
 
 async function analyseJourneyTable() {
@@ -755,6 +829,10 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (isTfLJourneyHistoryPage()) {
     await processBatchStateAfterLoad();
   }
+
+  await startCollectFromPendingNavigation();
+
+  injectTfLHelperPanel();
 
   if (autoDetect && isTfLJourneyHistoryPage()) {
     await analyseJourneyTable();
