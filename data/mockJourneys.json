@@ -1,42 +1,92 @@
 [
   {
-    "journeyDate": "2026-02-10",
+    "journeyDate": "2026-02-21",
     "from": "Stratford",
     "to": "Waterloo",
     "expectedMinutes": 24,
     "actualMinutes": 46,
     "ticketType": "Contactless",
     "delaySource": "inferred",
-    "zonesCrossed": 2
+    "zonesCrossed": 2,
+    "startTime": {
+      "hours": 8,
+      "mins": 12
+    },
+    "endTime": {
+      "hours": 8,
+      "mins": 58
+    }
   },
   {
-    "journeyDate": "2026-01-18",
+    "journeyDate": "2026-02-19",
     "from": "Ealing Broadway",
     "to": "Paddington",
     "expectedMinutes": 18,
-    "actualMinutes": 30,
+    "actualMinutes": 39,
     "ticketType": "Travelcard",
     "delaySource": "inferred",
-    "zonesCrossed": 2
+    "zonesCrossed": 2,
+    "startTime": {
+      "hours": 17,
+      "mins": 42
+    },
+    "endTime": {
+      "hours": 18,
+      "mins": 21
+    }
   },
   {
-    "journeyDate": "2025-12-01",
+    "journeyDate": "2026-02-15",
     "from": "Brixton",
     "to": "Oxford Circus",
     "expectedMinutes": 13,
-    "actualMinutes": 36,
+    "actualMinutes": 33,
     "ticketType": "Oyster PAYG",
     "delaySource": "user",
-    "zonesCrossed": 2
+    "zonesCrossed": 2,
+    "startTime": {
+      "hours": 9,
+      "mins": 5
+    },
+    "endTime": {
+      "hours": 9,
+      "mins": 38
+    }
   },
   {
     "journeyDate": "2026-02-12",
     "from": "Canary Wharf",
     "to": "Bank",
     "expectedMinutes": 9,
-    "actualMinutes": 19,
-    "ticketType": "Freedom Pass",
+    "actualMinutes": 27,
+    "ticketType": "Contactless",
     "delaySource": "inferred",
-    "zonesCrossed": 1
+    "zonesCrossed": 1,
+    "startTime": {
+      "hours": 14,
+      "mins": 20
+    },
+    "endTime": {
+      "hours": 14,
+      "mins": 47
+    }
+  },
+  {
+    "journeyDate": "2026-02-08",
+    "from": "Clapham Junction",
+    "to": "Canada Water",
+    "expectedMinutes": 20,
+    "actualMinutes": 41,
+    "ticketType": "Oyster PAYG",
+    "delaySource": "inferred",
+    "zonesCrossed": 2,
+    "startTime": {
+      "hours": 7,
+      "mins": 31
+    },
+    "endTime": {
+      "hours": 8,
+      "mins": 12
+    }
   }
 ]

@@ -10,12 +10,13 @@
     <main class="app">
       <header class="header">
         <h1>TfL Delay Claim Assistant</h1>
-        <p class="subtitle">Find delays ≥15 min and generate claim text.</p>
+        <p class="subtitle">Find delays ≥15 min and review eligible journeys.</p>
       </header>
 
       <section class="controls">
         <button id="collect28DaysButton" class="secondary">Collect Last 28 Days (Auto Cycle)</button>
         <button id="analyseButton">Analyse Delays</button>
+        <button id="submitRefundsButton" class="secondary">Auto-fill Service Delay Refunds</button>
         <label class="toggle-row">
           <input id="testModeToggle" type="checkbox" />
           Test mode (force local mock data)
@@ -34,17 +35,6 @@
         <h2>Eligible Journeys</h2>
         <div id="journeysList" class="journeys-list"></div>
       </section>
-
-      <section>
-        <h2>Claim Snippet</h2>
-        <textarea id="claimSnippet" rows="8" readonly placeholder="Run analysis to generate claim text..."></textarea>
-        <button id="copyButton" class="secondary">Copy Snippet</button>
-      </section>
-
-      <section class="paid-controls">
-        <button id="exportPdfButton" class="secondary">Paid: Export PDF Summary (JSON scaffold)</button>
-      </section>
-
       <aside id="adBanner" class="ad-banner">
         <strong>Ad:</strong> Upgrade to premium for auto-detection, monthly summaries, and no ads.
       </aside>

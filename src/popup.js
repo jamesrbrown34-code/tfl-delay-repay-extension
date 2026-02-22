@@ -1,17 +1,14 @@
 import { getEligibleJourneys } from './utils/delayEngine.js';
 import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
-import { buildBatchSnippet } from './utils/claimSnippet.js';
 
 const analyseButton = document.getElementById('analyseButton');
+const submitRefundsButton = document.getElementById('submitRefundsButton');
 const collect28DaysButton = document.getElementById('collect28DaysButton');
 const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
-const claimSnippet = document.getElementById('claimSnippet');
-const copyButton = document.getElementById('copyButton');
 const adBanner = document.getElementById('adBanner');
-const exportPdfButton = document.getElementById('exportPdfButton');
 
 let currentEligible = [];
 let testModeEnabled = false;
@@ -110,6 +107,23 @@ async function analyseFromPage() {
   }
 }
 
+
+async function startServiceDelayWorkflow(journeys) {
+  const tab = await getActiveTfLTab();
+  if (!tab?.id) return { ok: false, error: 'No active tab.' };
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'START_SERVICE_DELAY_WORKFLOW',
+      journeys
+    });
+
+    return response?.ok ? response : { ok: false, error: response?.error || 'Could not start workflow.' };
+  } catch (_error) {
+    return { ok: false, error: 'Could not connect to TfL page content script.' };
+  }
+}
+
 async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
   const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false };
@@ -121,8 +135,24 @@ async function refreshSettings() {
   autoDetectToggle.disabled = !settings.isPaidTier;
 
   adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
-  exportPdfButton.disabled = !settings.isPaidTier;
 }
+
+
+submitRefundsButton.addEventListener('click', async () => {
+  if (!currentEligible.length) {
+    summaryBox.innerHTML = '<p>No eligible journeys available yet. Click Analyse Delays first.</p>';
+    return;
+  }
+
+  const result = await startServiceDelayWorkflow(currentEligible);
+  if (result.ok) {
+    summaryBox.innerHTML = result.requiresManualClick
+      ? `<p>Started service delay workflow for ${result.queued} journey(s) in test mode. Test mode active: final Submit is not clicked. A popup + console log ("refund submitted") will be shown and automation continues to the next journey.</p>`
+      : `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+  } else {
+    summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;
+  }
+});
 
 collect28DaysButton.addEventListener('click', async () => {
   const result = await request28DaysCollection();
@@ -139,7 +169,6 @@ analyseButton.addEventListener('click', async () => {
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
     renderSummary(currentEligible);
-    claimSnippet.value = buildBatchSnippet(currentEligible);
 
     if (usedBatchData) {
       summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled 28-day collection.</p>';
@@ -165,31 +194,6 @@ autoDetectToggle.addEventListener('change', async () => {
   await chrome.runtime.sendMessage({
     type: 'UPDATE_SETTINGS',
     payload: { autoDetectOnLoad: autoDetectToggle.checked }
-  });
-});
-
-copyButton.addEventListener('click', async () => {
-  await navigator.clipboard.writeText(claimSnippet.value || '');
-  copyButton.textContent = 'Copied!';
-  setTimeout(() => {
-    copyButton.textContent = 'Copy Snippet';
-  }, 1200);
-});
-
-exportPdfButton.addEventListener('click', () => {
-  const data = {
-    generatedAt: new Date().toISOString(),
-    journeys: currentEligible,
-    totalRefundEstimate: estimateTotalRefund(currentEligible)
-  };
-
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-
-  chrome.downloads.download({
-    url,
-    filename: 'tfl-delay-claim-summary.json',
-    saveAs: true
   });
 });
 
