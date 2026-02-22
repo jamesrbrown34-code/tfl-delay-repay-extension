@@ -11,6 +11,11 @@ export const CONCESSION_KEYWORDS = [
   'free travel'
 ];
 
+const ELIGIBILITY_RULES = {
+  standard: (journey) => journey.delayEligible && journey.withinClaimWindow && !journey.concessionExcluded,
+  ignoreMinDelay: (journey) => journey.withinClaimWindow && !journey.concessionExcluded
+};
+
 export function isConcessionFare(ticketType = '') {
   const normalized = ticketType.toLowerCase();
   return CONCESSION_KEYWORDS.some((keyword) => normalized.includes(keyword));
@@ -36,9 +41,13 @@ export function isWithinClaimWindow(journeyDate, now = new Date()) {
   return normalizedJourney >= windowStart;
 }
 
-export function normalizeJourney(rawJourney) {
-  const expectedMinutes = Number(rawJourney.expectedMinutes || 0);
-  const actualMinutes = Number(rawJourney.actualMinutes || 0);
+function toNonNegativeNumber(value) {
+  return Math.max(0, Number(value || 0));
+}
+
+export function normalizeJourney(rawJourney = {}) {
+  const expectedMinutes = toNonNegativeNumber(rawJourney.expectedMinutes);
+  const actualMinutes = toNonNegativeNumber(rawJourney.actualMinutes);
   const delayMinutes = Math.max(0, actualMinutes - expectedMinutes);
 
   return {
@@ -50,18 +59,21 @@ export function normalizeJourney(rawJourney) {
   };
 }
 
-export function getEligibleJourneys(journeys) {
+export function getEligibleJourneysByRule(journeys = [], ruleName = 'standard') {
+  const rule = ELIGIBILITY_RULES[ruleName];
+  if (!rule) {
+    throw new Error(`Unknown eligibility rule: ${ruleName}`);
+  }
+
   return journeys
     .map(normalizeJourney)
-    .filter((journey) => journey.delayEligible)
-    .filter((journey) => journey.withinClaimWindow)
-    .filter((journey) => !journey.concessionExcluded);
+    .filter(rule);
 }
 
+export function getEligibleJourneys(journeys) {
+  return getEligibleJourneysByRule(journeys, 'standard');
+}
 
 export function getEligibleJourneysIgnoringMinDelay(journeys) {
-  return journeys
-    .map(normalizeJourney)
-    .filter((journey) => journey.withinClaimWindow)
-    .filter((journey) => !journey.concessionExcluded);
+  return getEligibleJourneysByRule(journeys, 'ignoreMinDelay');
 }
