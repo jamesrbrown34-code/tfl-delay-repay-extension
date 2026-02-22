@@ -66,3 +66,11 @@ If no eligible data is found on the active page, the popup falls back to mock da
 - Improve fare estimation with precise TfL fare tables per mode/time/zone.
 - Harden DOM parser selectors once exact TfL markup is confirmed.
 - Add tests for delay engine and claim snippet formatting.
+
+
+## Troubleshooting
+
+- **Error: `Could not establish connection. Receiving end does not exist.`**
+  - This happens when the active tab has no injected content script yet (for example a `chrome://` page, extension page, or a non-matching URL).
+  - Open `https://oyster.tfl.gov.uk/` and reload the extension from `chrome://extensions`, then refresh the tab.
+  - The popup now automatically falls back to `data/mockJourneys.json` when page messaging is unavailable.

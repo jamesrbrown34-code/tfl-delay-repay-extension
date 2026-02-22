@@ -44,21 +44,32 @@ async function getActiveTfLTab() {
   return tabs[0];
 }
 
+async function loadMockJourneys() {
+  const fallback = await fetch(chrome.runtime.getURL('data/mockJourneys.json')).then((response) => response.json());
+  return {
+    parsedJourneys: fallback,
+    eligibleJourneys: getEligibleJourneys(fallback),
+    usedMockData: true
+  };
+}
+
 async function analyseFromPage() {
   const tab = await getActiveTfLTab();
-  if (!tab?.id) throw new Error('No active tab found.');
-
-  const response = await chrome.tabs.sendMessage(tab.id, { type: 'ANALYSE_JOURNEYS' });
-
-  if (!response?.ok) {
-    const fallback = await fetch(chrome.runtime.getURL('data/mockJourneys.json')).then((r) => r.json());
-    return {
-      parsedJourneys: fallback,
-      eligibleJourneys: getEligibleJourneys(fallback)
-    };
+  if (!tab?.id) {
+    return loadMockJourneys();
   }
 
-  return response;
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'ANALYSE_JOURNEYS' });
+
+    if (!response?.ok) {
+      return loadMockJourneys();
+    }
+
+    return response;
+  } catch (_error) {
+    return loadMockJourneys();
+  }
 }
 
 async function refreshSettings() {
@@ -74,11 +85,15 @@ async function refreshSettings() {
 
 analyseButton.addEventListener('click', async () => {
   try {
-    const { eligibleJourneys } = await analyseFromPage();
+    const { eligibleJourneys, usedMockData } = await analyseFromPage();
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
     renderSummary(currentEligible);
     claimSnippet.value = buildBatchSnippet(currentEligible);
+
+    if (usedMockData) {
+      summaryBox.innerHTML += '<p>Using local mock data because the page analyser was unavailable.</p>';
+    }
   } catch (error) {
     summaryBox.innerHTML = `<p>Analysis failed: ${error.message}</p>`;
   }
