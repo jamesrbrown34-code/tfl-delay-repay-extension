@@ -396,6 +396,15 @@ function findNextButtonByText(labelText) {
   });
 }
 
+function logTestMode(event, details = {}) {
+  if (!details?.settings?.testMode) return;
+  const timestamp = new Date().toISOString();
+  console.log(`[SDR test mode] ${event}`, {
+    timestamp,
+    ...details
+  });
+}
+
 function clickFinalSubmitWithTestModeGuard(button, settings, fallbackMessage) {
   if (!button) return { ok: false, error: fallbackMessage };
 
@@ -582,13 +591,33 @@ async function fillFinalSubmitStep(state, settings) {
   const finalSubmitButton = findFinalSubmitButton();
   if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
 
+  logTestMode('final-submit-step-detected', {
+    settings,
+    queueLength: state?.queue?.length || 0,
+    completedLength: state?.completed?.length || 0,
+    stage: state?.stage
+  });
+
   const clickResult = clickFinalSubmitWithTestModeGuard(finalSubmitButton, settings, 'Final Submit button was not found.');
+
+  logTestMode('final-submit-click-guard-result', {
+    settings,
+    clickResult
+  });
 
   if (clickResult.requiresManualClick) {
     showTestModeRefundSubmittedNotice();
 
     const hasRemainingJourneys = Boolean(state?.queue?.length);
     const nextStage = hasRemainingJourneys ? 'card-selection' : 'completed';
+
+    logTestMode('final-submit-test-mode-branch', {
+      settings,
+      hasRemainingJourneys,
+      nextStage,
+      queueLength: state?.queue?.length || 0,
+      completedLength: state?.completed?.length || 0
+    });
 
     await chrome.storage.local.set({
       [CLAIM_AUTOFILL_STORAGE_KEY]: {
@@ -605,6 +634,11 @@ async function fillFinalSubmitStep(state, settings) {
         Array.from(document.querySelectorAll('a.btn.btn-default')).find((link) => (link.textContent || '').trim().toLowerCase() === 'back') ||
         document.querySelector('a[href*="/oyster/sdr.do"].btn.btn-default');
       const serviceDelayLink = backButton || document.querySelector('a[href*="/oyster/sdr.do"]') || document.querySelector('#navSDR');
+      logTestMode('test-mode-navigation-target', {
+        settings,
+        hasBackButton: Boolean(backButton),
+        hasServiceDelayLink: Boolean(serviceDelayLink)
+      });
       if (serviceDelayLink) {
         setTimeout(() => serviceDelayLink.click(), 250);
       }
@@ -627,6 +661,11 @@ async function fillFinalSubmitStep(state, settings) {
   });
 
   updateStatusPanel('Refund submitted', `Completed ${state.completed?.length || 0} journey(s) so far.`);
+  logTestMode('final-submit-real-click', {
+    settings,
+    clickResult,
+    completedLength: state?.completed?.length || 0
+  });
   return { ok: clickResult.ok, requiresManualClick: false };
 }
 
