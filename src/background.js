@@ -14,7 +14,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   chrome.notifications.create({
     type: 'basic',
     iconUrl: chrome.runtime.getURL('assets/icon.svg'),
-    title: 'TfL Delay Claim Assistant',
+    title: 'TubeRefund',
     message: 'Check journeys nearing the 28-day claim deadline.'
   });
 });

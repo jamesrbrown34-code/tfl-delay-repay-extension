@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "TfL Delay Claim Assistant",
+  "name": "TubeRefund",
   "description": "Detect eligible TfL journey delays and generate claim text snippets.",
   "version": "0.1.0",
   "permissions": [
@@ -15,7 +15,7 @@
     "https://tfl.gov.uk/*"
   ],
   "action": {
-    "default_title": "TfL Delay Claim Assistant",
+    "default_title": "TubeRefund",
     "default_popup": "src/popup.html"
   },
   "background": {
