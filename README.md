@@ -77,4 +77,6 @@ If no eligible data is found on the active page, the popup falls back to mock da
 
 
 - Use **Test mode** in the popup to force analysis from `data/mockJourneys.json` regardless of the active tab.
-- Use **Load Last 7 Days (Submit)** to click Oyster's `#date-range-button` automatically before analysis.
+- Use **Collect Last 28 Days (Auto Cycle)** to click Oyster's `#date-range-button` automatically before analysis.
+
+- **Collect Last 28 Days (Auto Cycle)** auto-cycles `#date-range` options in the last 28-day window, clicks Submit for each range, and stores an aggregated journey list for analysis.

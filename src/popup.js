@@ -3,7 +3,7 @@ import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 import { buildBatchSnippet } from './utils/claimSnippet.js';
 
 const analyseButton = document.getElementById('analyseButton');
-const last7DaysButton = document.getElementById('last7DaysButton');
+const collect28DaysButton = document.getElementById('collect28DaysButton');
 const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const summaryBox = document.getElementById('summaryBox');
@@ -56,12 +56,26 @@ async function loadMockJourneys() {
   };
 }
 
-async function requestLast7DaysRefresh() {
+async function getCompletedBatchData() {
+  const { batchCollection } = await chrome.storage.local.get('batchCollection');
+  if (batchCollection?.active) return null;
+  if (!batchCollection?.finishedAt) return null;
+  const parsedJourneys = batchCollection.journeys || [];
+  if (!parsedJourneys.length) return null;
+
+  return {
+    parsedJourneys,
+    eligibleJourneys: getEligibleJourneys(parsedJourneys),
+    usedBatchData: true
+  };
+}
+
+async function request28DaysCollection() {
   const tab = await getActiveTfLTab();
   if (!tab?.id) return { ok: false };
 
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type: 'LOAD_LAST_7_DAYS' });
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'COLLECT_LAST_28_DAYS' });
     return response?.ok ? response : { ok: false };
   } catch (_error) {
     return { ok: false };
@@ -71,6 +85,11 @@ async function requestLast7DaysRefresh() {
 async function analyseFromPage() {
   if (testModeEnabled) {
     return loadMockJourneys();
+  }
+
+  const batchData = await getCompletedBatchData();
+  if (batchData) {
+    return batchData;
   }
 
   const tab = await getActiveTfLTab();
@@ -105,22 +124,26 @@ async function refreshSettings() {
   exportPdfButton.disabled = !settings.isPaidTier;
 }
 
-last7DaysButton.addEventListener('click', async () => {
-  const result = await requestLast7DaysRefresh();
+collect28DaysButton.addEventListener('click', async () => {
+  const result = await request28DaysCollection();
   if (result.ok) {
-    summaryBox.innerHTML = '<p>Submitted date range on Oyster page. Now click Analyse Delays.</p>';
+    summaryBox.innerHTML = '<p>Started 28-day collection. Keep the Oyster tab open while date ranges auto-submit. When done, click Analyse Delays.</p>';
   } else {
-    summaryBox.innerHTML = '<p>Could not click Submit on this tab. Open Oyster journey history page and try again.</p>';
+    summaryBox.innerHTML = '<p>Could not start 28-day collection on this tab. Open Oyster journey history and try again.</p>';
   }
 });
 
 analyseButton.addEventListener('click', async () => {
   try {
-    const { eligibleJourneys, usedMockData } = await analyseFromPage();
+    const { eligibleJourneys, usedMockData, usedBatchData } = await analyseFromPage();
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
     renderSummary(currentEligible);
     claimSnippet.value = buildBatchSnippet(currentEligible);
+
+    if (usedBatchData) {
+      summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled 28-day collection.</p>';
+    }
 
     if (usedMockData) {
       summaryBox.innerHTML += '<p>Using local mock data (test mode or page analyser unavailable).</p>';
