@@ -1,9 +1,7 @@
 import { getEligibleJourneys } from './utils/delayEngine.js';
 import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 
-const analyseButton = document.getElementById('analyseButton');
-const submitRefundsButton = document.getElementById('submitRefundsButton');
-const collect28DaysButton = document.getElementById('collect28DaysButton');
+const runFullFlowButton = document.getElementById('runFullFlowButton');
 const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const summaryBox = document.getElementById('summaryBox');
@@ -100,33 +98,22 @@ async function request28DaysCollection() {
 }
 
 async function analyseFromPage() {
-  if (testModeEnabled) {
-    return loadMockJourneys();
-  }
+  if (testModeEnabled) return loadMockJourneys();
 
   const batchData = await getCompletedBatchData();
-  if (batchData) {
-    return batchData;
-  }
+  if (batchData) return batchData;
 
   const tab = await getActiveTfLTab();
-  if (!tab?.id) {
-    return loadMockJourneys();
-  }
+  if (!tab?.id) return loadMockJourneys();
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'ANALYSE_JOURNEYS' });
-
-    if (!response?.ok) {
-      return loadMockJourneys();
-    }
-
+    if (!response?.ok) return loadMockJourneys();
     return response;
   } catch (_error) {
     return loadMockJourneys();
   }
 }
-
 
 async function startServiceDelayWorkflow(journeys) {
   const tab = await getActiveTfLTab();
@@ -163,36 +150,40 @@ async function refreshWorkflowTracker() {
   renderWorkflowTracker(sdrAutofillState);
 }
 
+async function waitForBatchCompletion(maxWaitMs = 70000) {
+  const start = Date.now();
 
-submitRefundsButton.addEventListener('click', async () => {
-  if (!currentEligible.length) {
-    summaryBox.innerHTML = '<p>No eligible journeys available yet. Click Analyse Delays first.</p>';
-    return;
+  while (Date.now() - start < maxWaitMs) {
+    const { batchCollection } = await chrome.storage.local.get('batchCollection');
+    if (batchCollection?.finishedAt && !batchCollection?.active) {
+      return { ok: true };
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 1250));
   }
 
-  const result = await startServiceDelayWorkflow(currentEligible);
-  if (result.ok) {
-    summaryBox.innerHTML = result.requiresManualClick
-      ? `<p>Started service delay workflow for ${result.queued} journey(s) in test mode. Test mode active: final Submit is not clicked. A popup + console log ("refund submitted") will be shown and automation continues to the next journey.</p>`
-      : `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
-  } else {
-    summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;
-  }
+  return { ok: false };
+}
 
-  await refreshWorkflowTracker();
-});
+runFullFlowButton.addEventListener('click', async () => {
+  runFullFlowButton.disabled = true;
 
-collect28DaysButton.addEventListener('click', async () => {
-  const result = await request28DaysCollection();
-  if (result.ok) {
-    summaryBox.innerHTML = '<p>Started 28-day collection. Keep the Oyster tab open while date ranges auto-submit. When done, click Analyse Delays.</p>';
-  } else {
-    summaryBox.innerHTML = '<p>Could not start 28-day collection on this tab. Open Oyster journey history and try again.</p>';
-  }
-});
-
-analyseButton.addEventListener('click', async () => {
   try {
+    summaryBox.innerHTML = '<p>Step 1/3: Starting collection for last 28 days…</p>';
+    const collectResult = await request28DaysCollection();
+    if (!collectResult.ok) {
+      summaryBox.innerHTML = '<p>Could not start full flow. Open My Oyster cards or Journey history and try again.</p>';
+      return;
+    }
+
+    summaryBox.innerHTML = '<p>Step 1/3: Collecting journeys… leave the TfL tab open.</p>';
+    const collected = await waitForBatchCompletion();
+    if (!collected.ok && !testModeEnabled) {
+      summaryBox.innerHTML = '<p>Collection is still running. Keep the TfL tab open, then click Run Full Flow again.</p>';
+      return;
+    }
+
+    summaryBox.innerHTML = '<p>Step 2/3: Analysing eligible journeys…</p>';
     const { eligibleJourneys, usedMockData, usedBatchData } = await analyseFromPage();
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
@@ -206,9 +197,25 @@ analyseButton.addEventListener('click', async () => {
       summaryBox.innerHTML += '<p>Using local mock data (test mode or page analyser unavailable).</p>';
     }
 
+    if (!currentEligible.length) {
+      summaryBox.innerHTML += '<p>No eligible journeys to submit.</p>';
+      return;
+    }
+
+    summaryBox.innerHTML += '<p>Step 3/3: Starting service delay auto-fill workflow…</p>';
+    const result = await startServiceDelayWorkflow(currentEligible);
+    if (!result.ok) {
+      summaryBox.innerHTML += `<p>Could not start workflow: ${result.error}</p>`;
+      return;
+    }
+
+    summaryBox.innerHTML += result.requiresManualClick
+      ? `<p>Started for ${result.queued} journey(s) in test mode. Submit is skipped and loop continues via Service delay refunds.</p>`
+      : `<p>Started for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+
     await refreshWorkflowTracker();
-  } catch (error) {
-    summaryBox.innerHTML = `<p>Analysis failed: ${error.message}</p>`;
+  } finally {
+    runFullFlowButton.disabled = false;
   }
 });
 

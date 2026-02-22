@@ -185,6 +185,52 @@ function isExpectedTfLPage() {
   return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || path.includes('/oyster/sdr');
 }
 
+function getReadableWorkflowStage(stage = '') {
+  const mapping = {
+    'card-selection': 'Selecting Oyster card',
+    'journey-details': 'Filling journey details',
+    'refund-type-selected': 'Selecting refund type',
+    submitted: 'Submitting request',
+    completed: 'Completed'
+  };
+
+  return mapping[stage] || 'Preparing';
+}
+
+function ensureStatusPanel() {
+  if (!isExpectedTfLPage()) return null;
+
+  let panel = document.querySelector('#tfl-delay-helper-panel');
+  if (panel) return panel;
+
+  panel = document.createElement('div');
+  panel.id = 'tfl-delay-helper-panel';
+  panel.style.position = 'fixed';
+  panel.style.top = '16px';
+  panel.style.right = '16px';
+  panel.style.zIndex = '2147483647';
+  panel.style.background = '#0f766e';
+  panel.style.color = '#fff';
+  panel.style.borderRadius = '10px';
+  panel.style.padding = '10px 12px';
+  panel.style.fontSize = '12px';
+  panel.style.width = '280px';
+  panel.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
+  panel.innerHTML = '<strong>TfL Delay Assistant</strong><div id="tfl-delay-helper-panel-status" style="margin-top:4px;line-height:1.4"></div>';
+  document.body.appendChild(panel);
+  return panel;
+}
+
+function updateStatusPanel(status, detail = '') {
+  const panel = ensureStatusPanel();
+  if (!panel) return;
+
+  const statusNode = panel.querySelector('#tfl-delay-helper-panel-status');
+  if (!statusNode) return;
+
+  statusNode.innerHTML = detail ? `${status}<br><span style="opacity:0.9">${detail}</span>` : status;
+}
+
 function parseOptionRange(optionValue) {
   const [startRaw, endRaw] = String(optionValue || '').split('-');
   if (!startRaw || !endRaw) return null;
@@ -563,6 +609,11 @@ async function fillFinalSubmitStep(state, settings) {
       }
     }
 
+    updateStatusPanel(
+      hasRemainingJourneys ? 'Test mode: loop continues' : 'Test mode complete',
+      hasRemainingJourneys ? `Completed ${state.completed?.length || 0}. Opening Service delay refunds for next journey.` : 'No journeys remaining.'
+    );
+
     return { ok: true, requiresManualClick: true, continued: hasRemainingJourneys };
   }
 
@@ -574,6 +625,7 @@ async function fillFinalSubmitStep(state, settings) {
     }
   });
 
+  updateStatusPanel('Refund submitted', `Completed ${state.completed?.length || 0} journey(s) so far.`);
   return { ok: clickResult.ok, requiresManualClick: false };
 }
 
@@ -587,21 +639,25 @@ async function runServiceDelayAutofill() {
   const inFinalSubmitStep = Boolean(findFinalSubmitButton());
 
   if (inCardSelection) {
+    updateStatusPanel(getReadableWorkflowStage('card-selection'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
     await fillCardSelectionStep(sdrAutofillState, settings);
     return;
   }
 
   if (inJourneyDetails) {
+    updateStatusPanel(getReadableWorkflowStage('journey-details'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
     await fillJourneyDetailsStep(sdrAutofillState);
     return;
   }
 
   if (inRefundTypeStep) {
+    updateStatusPanel(getReadableWorkflowStage('refund-type-selected'), 'Selecting refund to card option.');
     await fillRefundTypeStep(sdrAutofillState);
     return;
   }
 
   if (inFinalSubmitStep) {
+    updateStatusPanel('Ready to submit refund request', settings?.testMode ? 'Test mode: Submit will be skipped and loop continues.' : 'Submitting this request now.');
     await fillFinalSubmitStep(sdrAutofillState, settings);
   }
 }
@@ -628,6 +684,7 @@ async function startServiceDelayWorkflow(journeys) {
     }
   });
 
+  updateStatusPanel('Starting service delay workflow', `Queued ${journeys.length} journey(s) for auto-fill.`);
   serviceDelayLink.click();
   return { ok: true, queued: journeys.length, requiresManualClick: Boolean(settings?.testMode) };
 }
@@ -650,6 +707,7 @@ async function processBatchStateAfterLoad() {
 
   const remainingQueue = [...(batchCollection.queue || [])];
   if (!remainingQueue.length) {
+    updateStatusPanel('Collection complete', `Collected ${mergedJourneys.length} journeys across the last 28 days.`);
     await chrome.storage.local.set({
       batchCollection: {
         ...batchCollection,
@@ -685,6 +743,8 @@ async function processBatchStateAfterLoad() {
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
   setTimeout(() => submitButton.click(), 300);
+
+  updateStatusPanel('Collecting last 28 days', `Processed ${batchCollection.processed?.length || 0} range(s), ${remainingQueue.length} remaining.`);
 }
 
 async function startCollectLast28Days() {
@@ -701,6 +761,7 @@ async function startCollectLast28Days() {
       }
     });
 
+    updateStatusPanel('Opening journey history', 'Started from My Oyster cards. Navigating to View journey history now.');
     setTimeout(() => journeyHistoryLink.click(), 200);
     return { ok: true, redirected: true, requiresManualClick: false };
   }
@@ -733,6 +794,7 @@ async function startCollectLast28Days() {
   select.value = firstValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
+  updateStatusPanel('Collecting last 28 days', `Queued ${queue.length + 1} date range(s). Auto-submitting now.`);
   setTimeout(() => submitButton.click(), 300);
 
   return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: false };
@@ -748,36 +810,29 @@ async function startCollectFromPendingNavigation() {
   if (!select || !submitButton) return;
 
   await chrome.storage.local.remove(PENDING_COLLECT_STORAGE_KEY);
+  updateStatusPanel('Journey history opened', 'Resuming automatic 28-day collection.');
   await startCollectLast28Days();
 }
 
 function injectTfLHelperPanel() {
   if (!isExpectedTfLPage()) return;
-  if (document.querySelector('#tfl-delay-helper-panel')) return;
 
-  const panel = document.createElement('button');
-  panel.id = 'tfl-delay-helper-panel';
-  panel.textContent = 'TfL Delay Assistant active';
-  panel.title = 'Open the extension to collect/analyse journeys.';
-  panel.style.position = 'fixed';
-  panel.style.top = '16px';
-  panel.style.right = '16px';
-  panel.style.zIndex = '2147483647';
-  panel.style.background = '#0f766e';
-  panel.style.color = '#fff';
-  panel.style.border = 'none';
-  panel.style.borderRadius = '999px';
-  panel.style.padding = '8px 12px';
-  panel.style.fontSize = '12px';
-  panel.style.cursor = 'pointer';
-  panel.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
-  panel.addEventListener('click', () => {
-    panel.textContent = 'Use extension icon to open controls';
-    setTimeout(() => {
-      panel.textContent = 'TfL Delay Assistant active';
-    }, 1800);
-  });
-  document.body.appendChild(panel);
+  if (isMyOysterCardsPage()) {
+    updateStatusPanel('Ready on My Oyster cards', 'Use Run full flow in the extension popup to open journey history and begin collection.');
+    return;
+  }
+
+  if (isTfLJourneyHistoryPage()) {
+    updateStatusPanel('Ready on Journey history', 'Waiting for collection/analyse command from the extension popup.');
+    return;
+  }
+
+  if (window.location.pathname.toLowerCase().includes('/oyster/sdr')) {
+    updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
+    return;
+  }
+
+  updateStatusPanel('TfL Delay Assistant active');
 }
 
 async function analyseJourneyTable() {
