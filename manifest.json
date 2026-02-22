@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "TfL Delay Claim Assistant",
+  "description": "Detect eligible TfL journey delays and generate claim text snippets.",
+  "version": "0.1.0",
+  "permissions": [
+    "storage",
+    "tabs",
+    "notifications",
+    "alarms",
+    "downloads"
+  ],
+  "host_permissions": [
+    "https://oyster.tfl.gov.uk/*",
+    "https://tfl.gov.uk/*"
+  ],
+  "action": {
+    "default_title": "TfL Delay Claim Assistant",
+    "default_popup": "src/popup.html"
+  },
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://oyster.tfl.gov.uk/*",
+        "https://tfl.gov.uk/*"
+      ],
+      "js": [
+        "src/contentScript.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "data/mockJourneys.json"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}
