@@ -57,3 +57,11 @@ export function getEligibleJourneys(journeys) {
     .filter((journey) => journey.withinClaimWindow)
     .filter((journey) => !journey.concessionExcluded);
 }
+
+
+export function getEligibleJourneysIgnoringMinDelay(journeys) {
+  return journeys
+    .map(normalizeJourney)
+    .filter((journey) => journey.withinClaimWindow)
+    .filter((journey) => !journey.concessionExcluded);
+}

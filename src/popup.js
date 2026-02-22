@@ -1,15 +1,17 @@
-import { getEligibleJourneys } from './utils/delayEngine.js';
+import { getEligibleJourneys, getEligibleJourneysIgnoringMinDelay } from './utils/delayEngine.js';
 import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 
 const runFullFlowButton = document.getElementById('runFullFlowButton');
 const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
+const testModeRealJourneysToggle = document.getElementById('testModeRealJourneysToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
 const adBanner = document.getElementById('adBanner');
 
 let currentEligible = [];
 let testModeEnabled = false;
+let testModeRealJourneysEnabled = false;
 
 function renderJourneys(journeys) {
   journeysList.innerHTML = '';
@@ -71,7 +73,7 @@ async function loadMockJourneys() {
   };
 }
 
-async function getCompletedBatchData() {
+async function getCompletedBatchData(ignoreMinDelay = false) {
   const { batchCollection } = await chrome.storage.local.get('batchCollection');
   if (batchCollection?.active) return null;
   if (!batchCollection?.finishedAt) return null;
@@ -80,7 +82,7 @@ async function getCompletedBatchData() {
 
   return {
     parsedJourneys,
-    eligibleJourneys: getEligibleJourneys(parsedJourneys),
+    eligibleJourneys: ignoreMinDelay ? getEligibleJourneysIgnoringMinDelay(parsedJourneys) : getEligibleJourneys(parsedJourneys),
     usedBatchData: true
   };
 }
@@ -100,18 +102,23 @@ async function request28DaysCollection() {
 async function analyseFromPage() {
   if (testModeEnabled) return loadMockJourneys();
 
-  const batchData = await getCompletedBatchData();
+  const ignoreMinDelay = testModeRealJourneysEnabled;
+
+  const batchData = await getCompletedBatchData(ignoreMinDelay);
   if (batchData) return batchData;
 
   const tab = await getActiveTfLTab();
-  if (!tab?.id) return loadMockJourneys();
+  if (!tab?.id) return ignoreMinDelay ? { parsedJourneys: [], eligibleJourneys: [], usedRealJourneyTestMode: true } : loadMockJourneys();
 
   try {
     const response = await chrome.tabs.sendMessage(tab.id, { type: 'ANALYSE_JOURNEYS' });
-    if (!response?.ok) return loadMockJourneys();
-    return response;
+    if (!response?.ok) return ignoreMinDelay ? { parsedJourneys: [], eligibleJourneys: [], usedRealJourneyTestMode: true } : loadMockJourneys();
+    const eligibleJourneys = ignoreMinDelay
+      ? getEligibleJourneysIgnoringMinDelay(response.parsedJourneys || [])
+      : response.eligibleJourneys;
+    return { ...response, eligibleJourneys, usedRealJourneyTestMode: ignoreMinDelay };
   } catch (_error) {
-    return loadMockJourneys();
+    return ignoreMinDelay ? { parsedJourneys: [], eligibleJourneys: [], usedRealJourneyTestMode: true } : loadMockJourneys();
   }
 }
 
@@ -133,10 +140,13 @@ async function startServiceDelayWorkflow(journeys) {
 
 async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-  const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false };
+  const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false, testModeRealJourneys: false };
 
   testModeEnabled = Boolean(settings.testMode);
   testModeToggle.checked = testModeEnabled;
+
+  testModeRealJourneysEnabled = Boolean(settings.testModeRealJourneys);
+  testModeRealJourneysToggle.checked = testModeRealJourneysEnabled;
 
   autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
   autoDetectToggle.disabled = !settings.isPaidTier;
@@ -184,7 +194,7 @@ runFullFlowButton.addEventListener('click', async () => {
     }
 
     summaryBox.innerHTML = '<p>Step 2/3: Analysing eligible journeys…</p>';
-    const { eligibleJourneys, usedMockData, usedBatchData } = await analyseFromPage();
+    const { eligibleJourneys, usedMockData, usedBatchData, usedRealJourneyTestMode } = await analyseFromPage();
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
     renderSummary(currentEligible);
@@ -195,6 +205,10 @@ runFullFlowButton.addEventListener('click', async () => {
 
     if (usedMockData) {
       summaryBox.innerHTML += '<p>Using local mock data (test mode or page analyser unavailable).</p>';
+    }
+
+    if (usedRealJourneyTestMode) {
+      summaryBox.innerHTML += '<p>Using real journeys in test mode (minimum delay filter bypassed; final submit remains blocked).</p>';
     }
 
     if (!currentEligible.length) {
@@ -221,9 +235,25 @@ runFullFlowButton.addEventListener('click', async () => {
 
 testModeToggle.addEventListener('change', async () => {
   testModeEnabled = testModeToggle.checked;
+  if (testModeEnabled) {
+    testModeRealJourneysEnabled = false;
+    testModeRealJourneysToggle.checked = false;
+  }
   await chrome.runtime.sendMessage({
     type: 'UPDATE_SETTINGS',
-    payload: { testMode: testModeEnabled }
+    payload: { testMode: testModeEnabled, testModeRealJourneys: testModeRealJourneysEnabled }
+  });
+});
+
+testModeRealJourneysToggle.addEventListener('change', async () => {
+  testModeRealJourneysEnabled = testModeRealJourneysToggle.checked;
+  if (testModeRealJourneysEnabled) {
+    testModeEnabled = false;
+    testModeToggle.checked = false;
+  }
+  await chrome.runtime.sendMessage({
+    type: 'UPDATE_SETTINGS',
+    payload: { testMode: testModeEnabled, testModeRealJourneys: testModeRealJourneysEnabled }
   });
 });
 

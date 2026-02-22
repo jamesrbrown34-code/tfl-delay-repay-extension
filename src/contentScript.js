@@ -397,7 +397,7 @@ function findNextButtonByText(labelText) {
 }
 
 function logTestMode(event, details = {}) {
-  if (!details?.settings?.testMode) return;
+  if (!details?.settings?.testMode && !details?.settings?.testModeRealJourneys) return;
   const timestamp = new Date().toISOString();
   console.log(`[SDR test mode] ${event}`, {
     timestamp,
@@ -408,7 +408,7 @@ function logTestMode(event, details = {}) {
 function clickFinalSubmitWithTestModeGuard(button, settings, fallbackMessage) {
   if (!button) return { ok: false, error: fallbackMessage };
 
-  if (settings?.testMode) {
+  if (settings?.testMode || settings?.testModeRealJourneys) {
     return { ok: true, requiresManualClick: true };
   }
 
