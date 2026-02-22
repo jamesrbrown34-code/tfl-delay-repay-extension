@@ -81,6 +81,15 @@ function parseTimeRangeStart(timeCell = '') {
   };
 }
 
+function parseTimeRangeEnd(timeCell = '') {
+  const match = String(timeCell).match(/[-–]\s*(\d{1,2})[:.](\d{2})/);
+  if (!match) return null;
+  return {
+    hours: Number(match[1]),
+    mins: Number(match[2])
+  };
+}
+
 function parseJourneyRows() {
   const rows = Array.from(document.querySelectorAll('table tbody tr'));
   let currentDateLabel = null;
@@ -125,6 +134,7 @@ function parseJourneyRows() {
         if (/touch\s+(in|out)|bus journey/i.test(actionText)) return null;
 
         const startTime = parseTimeRangeStart(firstCell);
+        const endTime = parseTimeRangeEnd(firstCell);
 
         return {
           journeyDate: currentDateLabel || firstCell,
@@ -137,7 +147,8 @@ function parseJourneyRows() {
           ticketType: 'PAYG',
           delaySource: 'statement-journey-action',
           zonesCrossed: 1,
-          startTime
+          startTime,
+          endTime
         };
       }
 
@@ -236,6 +247,25 @@ function extractTimeFromJourneyDate(journey = {}) {
   return {
     hours: Number(match[1]),
     mins: Number(match[2])
+  };
+}
+
+function extractEndTimeFromJourney(journey = {}) {
+  if (journey?.endTime && Number.isFinite(journey.endTime.hours) && Number.isFinite(journey.endTime.mins)) {
+    return {
+      hours: journey.endTime.hours,
+      mins: journey.endTime.mins
+    };
+  }
+
+  const start = extractTimeFromJourneyDate(journey);
+  const expected = Number(journey?.actualMinutes || journey?.expectedMinutes || 0);
+  const startTotal = start.hours * 60 + start.mins;
+  const endTotal = Math.max(startTotal, startTotal + expected);
+
+  return {
+    hours: Math.floor((endTotal % (24 * 60)) / 60),
+    mins: endTotal % 60
   };
 }
 
@@ -364,10 +394,13 @@ function fillJourneyDetailsForm(journey, settings) {
   const dateInput = document.querySelector('#journeyStartDate');
   const hourSelect = document.querySelector('#journeyStartDate_hh');
   const minuteSelect = document.querySelector('#journeyStartDate_mins');
+  const endDateInput = document.querySelector('#journeyEndDate');
+  const endHourSelect = document.querySelector('#journeyEndDate_hh');
+  const endMinuteSelect = document.querySelector('#journeyEndDate_mins');
   const delayHourSelect = document.querySelector('#lengthOfDelay_hh');
   const delayMinuteSelect = document.querySelector('#lengthOfDelay_mins');
 
-  if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !delayHourSelect || !delayMinuteSelect) {
+  if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !endDateInput || !endHourSelect || !endMinuteSelect || !delayHourSelect || !delayMinuteSelect) {
     return { ok: false, error: 'Service delay form fields were not found.' };
   }
 
@@ -390,6 +423,14 @@ function fillJourneyDetailsForm(journey, settings) {
   const startMinute = startTime.mins;
   setSelectValue(hourSelect, startHour);
   setSelectValue(minuteSelect, startMinute);
+
+  endDateInput.value = formatJourneyDate(journey.journeyDate);
+  endDateInput.dispatchEvent(new Event('input', { bubbles: true }));
+  endDateInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const endTime = extractEndTimeFromJourney(journey);
+  setSelectValue(endHourSelect, endTime.hours);
+  setSelectValue(endMinuteSelect, endTime.mins);
 
   const bufferedDelay = calculateDelayWithBuffer(journey.delayMinutes);
   setSelectValue(delayHourSelect, String(bufferedDelay.hours).padStart(2, '0'));
