@@ -11,6 +11,7 @@
     "downloads"
   ],
   "host_permissions": [
+    "https://oyster.tfl.gov.uk/*",
     "https://tfl.gov.uk/*"
   ],
   "action": {
@@ -24,6 +25,7 @@
   "content_scripts": [
     {
       "matches": [
+        "https://oyster.tfl.gov.uk/*",
         "https://tfl.gov.uk/*"
       ],
       "js": [

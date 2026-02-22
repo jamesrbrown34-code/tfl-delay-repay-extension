@@ -46,7 +46,7 @@ Chrome extension scaffold for analysing TfL journey history pages and generating
 1. Open Chrome and go to `chrome://extensions`.
 2. Enable **Developer mode**.
 3. Click **Load unpacked** and select this project folder.
-4. Navigate to a TfL journey history page when logged in.
+4. Navigate to TfL Oyster journey history (`https://oyster.tfl.gov.uk/`) when logged in.
 5. Open the extension popup and click **Analyse Delays**.
 
 If no eligible data is found on the active page, the popup falls back to mock data from `data/mockJourneys.json` for development.
@@ -58,7 +58,7 @@ If no eligible data is found on the active page, the popup falls back to mock da
 - `downloads`: Export monthly summary scaffold file.
 - `notifications`: Paid-tier reminder notifications.
 - `alarms`: Schedule reminder checks.
-- `host_permissions` (`https://tfl.gov.uk/*`): Run content script only on TfL pages.
+- `host_permissions` (`https://oyster.tfl.gov.uk/*`, `https://tfl.gov.uk/*`): Run content script on Oyster journey pages and compatible TfL pages.
 
 ## Notes / next steps
 

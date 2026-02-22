@@ -67,7 +67,11 @@ function getEligibleJourneys(journeys) {
 }
 
 function isTfLJourneyHistoryPage() {
-  return /journey-history/i.test(window.location.href);
+  const url = window.location.href.toLowerCase();
+  const host = window.location.hostname.toLowerCase();
+  const onTfLDomain = host === 'oyster.tfl.gov.uk' || host.endsWith('.tfl.gov.uk');
+
+  return onTfLDomain && /(journey-history|journeyhistory|journeys|history)/i.test(url);
 }
 
 async function analyseJourneyTable() {
