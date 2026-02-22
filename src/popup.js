@@ -3,6 +3,7 @@ import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 
 const runFullFlowButton = document.getElementById('runFullFlowButton');
 const testModeToggle = document.getElementById('testModeToggle');
+const killModeButton = document.getElementById('killModeButton');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const testModeRealJourneysToggle = document.getElementById('testModeRealJourneysToggle');
 const summaryBox = document.getElementById('summaryBox');
@@ -51,6 +52,10 @@ function renderWorkflowTracker(state) {
     <p><strong>Refund tracker</strong>: ${completed.length} requested, ${queue.length} remaining.</p>
     <p>Expected value requested so far: <strong>£${expectedValue}</strong></p>
   `;
+
+  if (state.stage === 'awaiting-final-submit') {
+    tracker.innerHTML += '<p><strong>Action required:</strong> On the TfL page, click <strong>Submit</strong> to create a valid claim.</p>';
+  }
 
   if (state.stage === 'completed' || (!state.active && completed.length)) {
     tracker.innerHTML += `<p><strong>Finished:</strong> ${completed.length} journeys requested, expected value is £${expectedValue}.</p>`;
@@ -160,6 +165,22 @@ async function refreshWorkflowTracker() {
   renderWorkflowTracker(sdrAutofillState);
 }
 
+
+async function triggerKillMode() {
+  await chrome.storage.local.remove(['sdrAutofillState', 'batchCollection', 'pendingCollectFromMyCards']);
+
+  const tab = await getActiveTfLTab();
+  if (tab?.id) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'KILL_AUTOFILL' });
+    } catch (_error) {
+      // The active tab may not be a TfL page/content-script target.
+    }
+  }
+
+  summaryBox.innerHTML = '<p><strong>Kill mode activated.</strong> Cleared all queued automation state. If a TfL page is open, automation has been stopped there too.</p>';
+}
+
 async function waitForBatchCompletion(maxWaitMs = 70000) {
   const start = Date.now();
 
@@ -174,6 +195,16 @@ async function waitForBatchCompletion(maxWaitMs = 70000) {
 
   return { ok: false };
 }
+
+killModeButton.addEventListener('click', async () => {
+  killModeButton.disabled = true;
+  try {
+    await triggerKillMode();
+    await refreshWorkflowTracker();
+  } finally {
+    killModeButton.disabled = false;
+  }
+});
 
 runFullFlowButton.addEventListener('click', async () => {
   runFullFlowButton.disabled = true;
@@ -226,6 +257,7 @@ runFullFlowButton.addEventListener('click', async () => {
     summaryBox.innerHTML += result.requiresManualClick
       ? `<p>Started for ${result.queued} journey(s) in test mode. Submit is skipped and loop continues via Service delay refunds.</p>`
       : `<p>Started for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+    summaryBox.innerHTML += '<p><strong>Final step:</strong> click Submit yourself on the TfL page for a valid claim.</p>';
 
     await refreshWorkflowTracker();
   } finally {

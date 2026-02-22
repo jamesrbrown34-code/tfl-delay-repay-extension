@@ -189,7 +189,7 @@ function getReadableWorkflowStage(stage = '') {
   const mapping = {
     'card-selection': 'Selecting Oyster card',
     'journey-details': 'Filling journey details',
-    'refund-type-selected': 'Selecting refund type',
+    'refund-type-selected': 'Final step: click Submit for a valid claim',
     submitted: 'Submitting request',
     completed: 'Completed'
   };
@@ -378,6 +378,19 @@ function setSelectValue(select, value) {
   return true;
 }
 
+function ensureOysterCardTypeSelected() {
+  const oysterCardRadio = document.querySelector('#oysterCardType');
+  if (!oysterCardRadio) return false;
+
+  const oysterCardLabel = document.querySelector('label[for="oysterCardType"]');
+  if (oysterCardLabel) oysterCardLabel.click();
+  oysterCardRadio.click();
+  oysterCardRadio.checked = true;
+  oysterCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
+  oysterCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
 function getFirstOysterCardOption(select) {
   return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
 }
@@ -405,17 +418,6 @@ function logTestMode(event, details = {}) {
   });
 }
 
-function clickFinalSubmitWithTestModeGuard(button, settings, fallbackMessage) {
-  if (!button) return { ok: false, error: fallbackMessage };
-
-  if (settings?.testMode || settings?.testModeRealJourneys) {
-    return { ok: true, requiresManualClick: true };
-  }
-
-  setTimeout(() => button.click(), 250);
-  return { ok: true, requiresManualClick: false };
-}
-
 function findFinalSubmitButton() {
   const byValue = document.querySelector('button[type="submit"][value="Submit"],input[type="submit"][value="Submit"]');
   if (byValue) return byValue;
@@ -427,6 +429,8 @@ function findFinalSubmitButton() {
 }
 
 async function fillCardSelectionStep(state, settings) {
+  ensureOysterCardTypeSelected();
+
   const cardSelect = document.querySelector('#oysterCardId');
   if (!cardSelect) return false;
 
@@ -562,20 +566,18 @@ async function fillRefundTypeStep(state) {
   return { ok: true, selected: 'FUL' };
 }
 
-function showTestModeRefundSubmittedNotice() {
-  console.log('refund submitted');
-
-  const existing = document.querySelector('#sdr-testmode-toast');
+function showFinalSubmitManualNotice() {
+  const existing = document.querySelector('#sdr-final-submit-toast');
   if (existing) existing.remove();
 
   const toast = document.createElement('div');
-  toast.id = 'sdr-testmode-toast';
-  toast.textContent = 'refund submitted';
+  toast.id = 'sdr-final-submit-toast';
+  toast.textContent = 'Final step: click Submit on this page for a valid claim.';
   toast.style.position = 'fixed';
   toast.style.right = '16px';
   toast.style.bottom = '16px';
   toast.style.padding = '8px 12px';
-  toast.style.background = '#0f766e';
+  toast.style.background = '#7c2d12';
   toast.style.color = '#fff';
   toast.style.borderRadius = '6px';
   toast.style.fontSize = '12px';
@@ -584,89 +586,25 @@ function showTestModeRefundSubmittedNotice() {
 
   setTimeout(() => {
     toast.remove();
-  }, 2000);
+  }, 5000);
 }
 
-async function fillFinalSubmitStep(state, settings) {
+async function fillFinalSubmitStep(state) {
   const finalSubmitButton = findFinalSubmitButton();
   if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
 
-  logTestMode('final-submit-step-detected', {
-    settings,
-    queueLength: state?.queue?.length || 0,
-    completedLength: state?.completed?.length || 0,
-    stage: state?.stage
-  });
-
-  const clickResult = clickFinalSubmitWithTestModeGuard(finalSubmitButton, settings, 'Final Submit button was not found.');
-
-  logTestMode('final-submit-click-guard-result', {
-    settings,
-    clickResult
-  });
-
-  if (clickResult.requiresManualClick) {
-    showTestModeRefundSubmittedNotice();
-
-    const hasRemainingJourneys = Boolean(state?.queue?.length);
-    const nextStage = hasRemainingJourneys ? 'card-selection' : 'completed';
-
-    logTestMode('final-submit-test-mode-branch', {
-      settings,
-      hasRemainingJourneys,
-      nextStage,
-      queueLength: state?.queue?.length || 0,
-      completedLength: state?.completed?.length || 0
-    });
-
-    await chrome.storage.local.set({
-      [CLAIM_AUTOFILL_STORAGE_KEY]: {
-        ...state,
-        active: hasRemainingJourneys,
-        stage: nextStage,
-        finalSubmitAttemptedAt: new Date().toISOString(),
-        simulatedSubmitAt: new Date().toISOString()
-      }
-    });
-
-    if (hasRemainingJourneys) {
-      const backButton =
-        Array.from(document.querySelectorAll('a.btn.btn-default')).find((link) => (link.textContent || '').trim().toLowerCase() === 'back') ||
-        document.querySelector('a[href*="/oyster/sdr.do"].btn.btn-default');
-      const serviceDelayLink = backButton || document.querySelector('a[href*="/oyster/sdr.do"]') || document.querySelector('#navSDR');
-      logTestMode('test-mode-navigation-target', {
-        settings,
-        hasBackButton: Boolean(backButton),
-        hasServiceDelayLink: Boolean(serviceDelayLink)
-      });
-      if (serviceDelayLink) {
-        setTimeout(() => serviceDelayLink.click(), 250);
-      }
-    }
-
-    updateStatusPanel(
-      hasRemainingJourneys ? 'Test mode: loop continues' : 'Test mode complete',
-      hasRemainingJourneys ? `Completed ${state.completed?.length || 0}. Clicking Back to return to Service delay refunds for next journey.` : 'No journeys remaining.'
-    );
-
-    return { ok: true, requiresManualClick: true, continued: hasRemainingJourneys };
-  }
+  updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
+  showFinalSubmitManualNotice();
 
   await chrome.storage.local.set({
     [CLAIM_AUTOFILL_STORAGE_KEY]: {
       ...state,
-      stage: 'submitted',
-      finalSubmitAttemptedAt: new Date().toISOString()
+      stage: 'awaiting-final-submit',
+      finalSubmitPromptedAt: new Date().toISOString()
     }
   });
 
-  updateStatusPanel('Refund submitted', `Completed ${state.completed?.length || 0} journey(s) so far.`);
-  logTestMode('final-submit-real-click', {
-    settings,
-    clickResult,
-    completedLength: state?.completed?.length || 0
-  });
-  return { ok: clickResult.ok, requiresManualClick: false };
+  return { ok: true, requiresManualClick: true, prompted: true };
 }
 
 async function runServiceDelayAutofill() {
@@ -691,14 +629,14 @@ async function runServiceDelayAutofill() {
   }
 
   if (inRefundTypeStep) {
-    updateStatusPanel(getReadableWorkflowStage('refund-type-selected'), 'Selecting refund to card option.');
+    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
     await fillRefundTypeStep(sdrAutofillState);
     return;
   }
 
   if (inFinalSubmitStep) {
-    updateStatusPanel('Ready to submit refund request', settings?.testMode ? 'Test mode: Submit will be skipped and loop continues.' : 'Submitting this request now.');
-    await fillFinalSubmitStep(sdrAutofillState, settings);
+    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
+    await fillFinalSubmitStep(sdrAutofillState);
   }
 }
 
@@ -910,6 +848,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'START_SERVICE_DELAY_WORKFLOW') {
     startServiceDelayWorkflow(message.journeys)
       .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
+  if (message?.type === 'KILL_AUTOFILL') {
+    chrome.storage.local
+      .remove([CLAIM_AUTOFILL_STORAGE_KEY, 'batchCollection', PENDING_COLLECT_STORAGE_KEY])
+      .then(() => {
+        updateStatusPanel('Kill mode activated', 'All automation queues were cleared for this tab.');
+        sendResponse({ ok: true });
+      })
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
