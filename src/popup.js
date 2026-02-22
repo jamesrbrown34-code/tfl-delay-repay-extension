@@ -52,6 +52,10 @@ function renderWorkflowTracker(state) {
     <p>Expected value requested so far: <strong>£${expectedValue}</strong></p>
   `;
 
+  if (state.stage === 'awaiting-final-submit') {
+    tracker.innerHTML += '<p><strong>Action required:</strong> On the TfL page, click <strong>Submit</strong> to create a valid claim.</p>';
+  }
+
   if (state.stage === 'completed' || (!state.active && completed.length)) {
     tracker.innerHTML += `<p><strong>Finished:</strong> ${completed.length} journeys requested, expected value is £${expectedValue}.</p>`;
   }
@@ -226,6 +230,7 @@ runFullFlowButton.addEventListener('click', async () => {
     summaryBox.innerHTML += result.requiresManualClick
       ? `<p>Started for ${result.queued} journey(s) in test mode. Submit is skipped and loop continues via Service delay refunds.</p>`
       : `<p>Started for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+    summaryBox.innerHTML += '<p><strong>Final step:</strong> click Submit yourself on the TfL page for a valid claim.</p>';
 
     await refreshWorkflowTracker();
   } finally {
