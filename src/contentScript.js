@@ -1,94 +1,29 @@
-const CLAIM_WINDOW_DAYS = 28;
+import {
+  CLAIM_WINDOW_DAYS,
+  formatJourneyDate,
+  parseDateLabelToDdMmYyyy
+} from './core/dateUtils.js';
+import {
+  calculateDelayWithBuffer,
+  getEligibleJourneys
+} from './core/eligibility.js';
+import {
+  normalizeStationName,
+  parseStationPairFromAction
+} from './core/stationUtils.js';
+import {
+  extractEndTimeFromJourney,
+  extractTimeFromJourneyDate,
+  parseTimeRangeEnd,
+  parseTimeRangeStart
+} from './core/timeUtils.js';
+
 const MIN_DELAY_MINUTES = 15;
-const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
 const PENDING_COLLECT_STORAGE_KEY = 'pendingCollectFromMyCards';
-const CONCESSION_KEYWORDS = [
-  'freedom pass',
-  '60+ oyster',
-  'veteran',
-  'child',
-  'zip',
-  'concession',
-  'free travel'
-];
 
 function extractText(node, fallback = '') {
   return (node?.textContent || fallback).trim();
-}
-
-function isConcessionFare(ticketType = '') {
-  const normalized = ticketType.toLowerCase();
-  return CONCESSION_KEYWORDS.some((keyword) => normalized.includes(keyword));
-}
-
-function isWithinClaimWindow(journeyDate, now = new Date()) {
-  const parsedDate = new Date(journeyDate);
-  if (Number.isNaN(parsedDate.getTime())) return false;
-
-  const windowStart = new Date(now);
-  windowStart.setHours(0, 0, 0, 0);
-  windowStart.setDate(windowStart.getDate() - CLAIM_WINDOW_DAYS);
-
-  parsedDate.setHours(0, 0, 0, 0);
-  return parsedDate >= windowStart;
-}
-
-function parseStationPairFromAction(actionText = '') {
-  const match = actionText.match(/(.+?)\s+to\s+(.+)/i);
-  if (!match) return null;
-
-  const from = match[1].trim();
-  const to = match[2].trim();
-  if (!from || !to) return null;
-
-  return { from, to };
-}
-
-function parseDateLabelToDdMmYyyy(text = '') {
-  const normalized = String(text).replace(/\s+/g, ' ').trim();
-  const match = normalized.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-  if (!match) return null;
-
-  const monthMap = {
-    january: 1,
-    february: 2,
-    march: 3,
-    april: 4,
-    may: 5,
-    june: 6,
-    july: 7,
-    august: 8,
-    september: 9,
-    october: 10,
-    november: 11,
-    december: 12
-  };
-
-  const day = Number(match[1]);
-  const month = monthMap[match[2].toLowerCase()];
-  const year = Number(match[3]);
-  if (!day || !month || !year) return null;
-
-  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-}
-
-function parseTimeRangeStart(timeCell = '') {
-  const match = String(timeCell).match(/(\d{1,2})[:.](\d{2})\s*[-–]/);
-  if (!match) return null;
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
-}
-
-function parseTimeRangeEnd(timeCell = '') {
-  const match = String(timeCell).match(/[-–]\s*(\d{1,2})[:.](\d{2})/);
-  if (!match) return null;
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
 }
 
 function parseJourneyRows() {
@@ -156,13 +91,6 @@ function parseJourneyRows() {
       return null;
     })
     .filter(Boolean);
-}
-
-function getEligibleJourneys(journeys) {
-  return journeys
-    .filter((journey) => journey.delayEligible)
-    .filter((journey) => isWithinClaimWindow(journey.journeyDate))
-    .filter((journey) => !isConcessionFare(journey.ticketType));
 }
 
 function isTfLJourneyHistoryPage() {
@@ -268,85 +196,6 @@ function getJourneyKey(journey) {
   return [journey.journeyDate, journey.from, journey.to, journey.expectedMinutes, journey.actualMinutes, journey.ticketType].join('|');
 }
 
-function parseDdMmYyyyToDate(rawDate) {
-  const normalized = String(rawDate || '').trim();
-  const ddMmYyyyMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!ddMmYyyyMatch) return null;
-
-  const day = Number(ddMmYyyyMatch[1]);
-  const month = Number(ddMmYyyyMatch[2]);
-  const year = Number(ddMmYyyyMatch[3]);
-
-  if (!day || !month || !year) return null;
-
-  const parsed = new Date(year, month - 1, day);
-  if (Number.isNaN(parsed.getTime())) return null;
-  if (parsed.getDate() !== day || parsed.getMonth() !== month - 1 || parsed.getFullYear() !== year) return null;
-
-  return parsed;
-}
-
-function formatDateAsDdMmYyyy(date) {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear());
-  return `${day}/${month}/${year}`;
-}
-
-function extractTimeFromJourneyDate(journey = {}) {
-  if (journey?.startTime && Number.isFinite(journey.startTime.hours) && Number.isFinite(journey.startTime.mins)) {
-    return {
-      hours: journey.startTime.hours,
-      mins: journey.startTime.mins
-    };
-  }
-
-  const match = String(journey?.journeyDate || '').match(/(\d{1,2}):(\d{2})/);
-  if (!match) return { hours: 12, mins: 0 };
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
-}
-
-function extractEndTimeFromJourney(journey = {}) {
-  if (journey?.endTime && Number.isFinite(journey.endTime.hours) && Number.isFinite(journey.endTime.mins)) {
-    return {
-      hours: journey.endTime.hours,
-      mins: journey.endTime.mins
-    };
-  }
-
-  const start = extractTimeFromJourneyDate(journey);
-  const expected = Number(journey?.actualMinutes || journey?.expectedMinutes || 0);
-  const startTotal = start.hours * 60 + start.mins;
-  const endTotal = Math.max(startTotal, startTotal + expected);
-
-  return {
-    hours: Math.floor((endTotal % (24 * 60)) / 60),
-    mins: endTotal % 60
-  };
-}
-
-function formatJourneyDate(rawDate) {
-  const parsedDdMmYyyy = parseDdMmYyyyToDate(rawDate);
-  if (parsedDdMmYyyy) return formatDateAsDdMmYyyy(parsedDdMmYyyy);
-
-  const parsedLabel = parseDateLabelToDdMmYyyy(rawDate);
-  if (parsedLabel) return parsedLabel;
-
-  const parsedGeneric = new Date(String(rawDate || '').replace(/(\d{1,2}:\d{2}).*$/, '').trim());
-  if (!Number.isNaN(parsedGeneric.getTime())) {
-    return formatDateAsDdMmYyyy(parsedGeneric);
-  }
-
-  return formatDateAsDdMmYyyy(new Date());
-}
-
-function normalizeStationName(name = '') {
-  return name.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
-}
-
 function selectOptionByText(select, label) {
   if (!select || !label) return false;
 
@@ -393,13 +242,6 @@ function ensureOysterCardTypeSelected() {
 
 function getFirstOysterCardOption(select) {
   return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
-}
-
-function calculateDelayWithBuffer(delayMinutes) {
-  const totalMinutes = Math.max(0, Number(delayMinutes) || 0) + CLAIM_AUTOFILL_BUFFER_MINUTES;
-  const hours = Math.min(3, Math.floor(totalMinutes / 60));
-  const mins = totalMinutes % 60;
-  return { hours, mins };
 }
 
 function findNextButtonByText(labelText) {
