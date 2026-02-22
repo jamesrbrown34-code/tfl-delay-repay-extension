@@ -1,5 +1,7 @@
 const CLAIM_WINDOW_DAYS = 28;
 const MIN_DELAY_MINUTES = 15;
+const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
+const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
 const CONCESSION_KEYWORDS = [
   'freedom pass',
   '60+ oyster',
@@ -109,6 +111,229 @@ function getDateRangeOptionsForLast28Days() {
 
 function getJourneyKey(journey) {
   return [journey.journeyDate, journey.from, journey.to, journey.expectedMinutes, journey.actualMinutes, journey.ticketType].join('|');
+}
+
+function parseDdMmYyyyToDate(rawDate) {
+  const [day, month, year] = String(rawDate || '')
+    .split('/')
+    .map((part) => Number(part));
+  if (!day || !month || !year) return null;
+
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+
+function extractTimeFromJourneyDate(journeyDate = '') {
+  const match = String(journeyDate).match(/(\d{1,2}):(\d{2})/);
+  if (!match) return { hours: 12, mins: 0 };
+  return {
+    hours: Number(match[1]),
+    mins: Number(match[2])
+  };
+}
+
+function formatJourneyDate(rawDate) {
+  const parsed = parseDdMmYyyyToDate(rawDate);
+  if (!parsed) return rawDate;
+
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = String(parsed.getFullYear());
+  return `${day}/${month}/${year}`;
+}
+
+function normalizeStationName(name = '') {
+  return name.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function selectOptionByText(select, label) {
+  if (!select || !label) return false;
+
+  const target = normalizeStationName(label);
+  const options = Array.from(select.options || []);
+  const directMatch = options.find((option) => normalizeStationName(option.textContent) === target);
+  const partialMatch =
+    directMatch ||
+    options.find((option) => {
+      const optionLabel = normalizeStationName(option.textContent);
+      return optionLabel.includes(target) || target.includes(optionLabel);
+    });
+
+  const selected = partialMatch;
+  if (!selected) return false;
+
+  select.value = selected.value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+function setSelectValue(select, value) {
+  if (!select || value == null) return false;
+  const asString = String(value);
+  const match = Array.from(select.options || []).find((option) => option.value === asString);
+  if (!match) return false;
+  select.value = match.value;
+  select.dispatchEvent(new Event('change', { bubbles: true }));
+  return true;
+}
+
+function getFirstOysterCardOption(select) {
+  return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
+}
+
+function calculateDelayWithBuffer(delayMinutes) {
+  const totalMinutes = Math.max(0, Number(delayMinutes) || 0) + CLAIM_AUTOFILL_BUFFER_MINUTES;
+  const hours = Math.min(3, Math.floor(totalMinutes / 60));
+  const mins = totalMinutes % 60;
+  return { hours, mins };
+}
+
+function findNextButtonByText(labelText) {
+  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
+    const text = (element.textContent || element.value || '').toLowerCase().trim();
+    return text === labelText.toLowerCase();
+  });
+}
+
+async function fillCardSelectionStep(state, settings) {
+  const cardSelect = document.querySelector('#oysterCardId');
+  if (!cardSelect) return false;
+
+  const preferredCardId = settings?.serviceDelayCardId;
+  if (preferredCardId) {
+    setSelectValue(cardSelect, preferredCardId);
+  } else if (!cardSelect.value) {
+    const firstCard = getFirstOysterCardOption(cardSelect);
+    if (firstCard) {
+      cardSelect.value = firstCard.value;
+      cardSelect.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+  }
+
+  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
+  if (!nextPageButton) return false;
+
+  await chrome.storage.local.set({
+    [CLAIM_AUTOFILL_STORAGE_KEY]: {
+      ...state,
+      stage: 'journey-details'
+    }
+  });
+
+  setTimeout(() => nextPageButton.click(), 250);
+  return true;
+}
+
+function fillJourneyDetailsForm(journey, settings) {
+  const lineSelect = document.querySelector('#tflNetworkLine');
+  const startSelect = document.querySelector('#startStationNlc');
+  const endSelect = document.querySelector('#endStationNlc');
+  const dateInput = document.querySelector('#journeyStartDate');
+  const hourSelect = document.querySelector('#journeyStartDate_hh');
+  const minuteSelect = document.querySelector('#journeyStartDate_mins');
+  const delayHourSelect = document.querySelector('#lengthOfDelay_hh');
+  const delayMinuteSelect = document.querySelector('#lengthOfDelay_mins');
+
+  if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !delayHourSelect || !delayMinuteSelect) {
+    return { ok: false, error: 'Service delay form fields were not found.' };
+  }
+
+  const selectedLine = settings?.serviceDelayNetworkLine || 'UNDERGROUND';
+  setSelectValue(lineSelect, selectedLine);
+
+  const startMatched = selectOptionByText(startSelect, journey.from);
+  const endMatched = selectOptionByText(endSelect, journey.to);
+
+  if (!startMatched || !endMatched) {
+    return { ok: false, error: `Could not map station(s) for journey ${journey.from} → ${journey.to}.` };
+  }
+
+  dateInput.value = formatJourneyDate(journey.journeyDate);
+  dateInput.dispatchEvent(new Event('input', { bubbles: true }));
+  dateInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+  const startTime = extractTimeFromJourneyDate(journey.journeyDate);
+  const startHour = startTime.hours;
+  const startMinute = startTime.mins;
+  setSelectValue(hourSelect, startHour);
+  setSelectValue(minuteSelect, startMinute);
+
+  const bufferedDelay = calculateDelayWithBuffer(journey.delayMinutes);
+  setSelectValue(delayHourSelect, String(bufferedDelay.hours).padStart(2, '0'));
+  setSelectValue(delayMinuteSelect, bufferedDelay.mins);
+
+  return { ok: true };
+}
+
+async function fillJourneyDetailsStep(state) {
+  const journey = state?.queue?.[0];
+  if (!journey) {
+    await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
+    return { ok: false, error: 'No journeys left to submit.' };
+  }
+
+  const { settings } = await chrome.storage.local.get('settings');
+  const fillResult = fillJourneyDetailsForm(journey, settings);
+  if (!fillResult.ok) return fillResult;
+
+  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
+  if (!nextPageButton) return { ok: false, error: 'Next Page button was not found on journey details form.' };
+
+  const remaining = state.queue.slice(1);
+  await chrome.storage.local.set({
+    [CLAIM_AUTOFILL_STORAGE_KEY]: {
+      ...state,
+      queue: remaining,
+      completed: [...(state.completed || []), journey],
+      stage: remaining.length ? 'card-selection' : 'completed',
+      lastSubmittedAt: new Date().toISOString()
+    }
+  });
+
+  setTimeout(() => nextPageButton.click(), 250);
+  return { ok: true, submitted: journey, remaining: remaining.length };
+}
+
+async function runServiceDelayAutofill() {
+  const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
+  if (!sdrAutofillState?.active) return;
+
+  const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
+  const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
+
+  if (inCardSelection) {
+    await fillCardSelectionStep(sdrAutofillState, settings);
+    return;
+  }
+
+  if (inJourneyDetails) {
+    await fillJourneyDetailsStep(sdrAutofillState);
+  }
+}
+
+async function startServiceDelayWorkflow(journeys) {
+  if (!Array.isArray(journeys) || !journeys.length) {
+    return { ok: false, error: 'No journeys supplied for service delay workflow.' };
+  }
+
+  const serviceDelayLink = document.querySelector('#navSDR');
+  if (!serviceDelayLink) {
+    return { ok: false, error: 'Service delay refunds navigation link not found.' };
+  }
+
+  await chrome.storage.local.set({
+    [CLAIM_AUTOFILL_STORAGE_KEY]: {
+      active: true,
+      startedAt: new Date().toISOString(),
+      stage: 'card-selection',
+      queue: journeys,
+      completed: []
+    }
+  });
+
+  serviceDelayLink.click();
+  return { ok: true, queued: journeys.length };
 }
 
 async function processBatchStateAfterLoad() {
@@ -230,6 +455,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'START_SERVICE_DELAY_WORKFLOW') {
+    startServiceDelayWorkflow(message.journeys)
+      .then((result) => sendResponse(result))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   return undefined;
 });
 
@@ -244,4 +476,6 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (autoDetect && isTfLJourneyHistoryPage()) {
     await analyseJourneyTable();
   }
+
+  await runServiceDelayAutofill();
 })();

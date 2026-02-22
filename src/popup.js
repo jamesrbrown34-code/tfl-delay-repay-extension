@@ -3,6 +3,7 @@ import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 import { buildBatchSnippet } from './utils/claimSnippet.js';
 
 const analyseButton = document.getElementById('analyseButton');
+const submitRefundsButton = document.getElementById('submitRefundsButton');
 const collect28DaysButton = document.getElementById('collect28DaysButton');
 const testModeToggle = document.getElementById('testModeToggle');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
@@ -110,6 +111,23 @@ async function analyseFromPage() {
   }
 }
 
+
+async function startServiceDelayWorkflow(journeys) {
+  const tab = await getActiveTfLTab();
+  if (!tab?.id) return { ok: false, error: 'No active tab.' };
+
+  try {
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      type: 'START_SERVICE_DELAY_WORKFLOW',
+      journeys
+    });
+
+    return response?.ok ? response : { ok: false, error: response?.error || 'Could not start workflow.' };
+  } catch (_error) {
+    return { ok: false, error: 'Could not connect to TfL page content script.' };
+  }
+}
+
 async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
   const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false };
@@ -123,6 +141,21 @@ async function refreshSettings() {
   adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
   exportPdfButton.disabled = !settings.isPaidTier;
 }
+
+
+submitRefundsButton.addEventListener('click', async () => {
+  if (!currentEligible.length) {
+    summaryBox.innerHTML = '<p>No eligible journeys available yet. Click Analyse Delays first.</p>';
+    return;
+  }
+
+  const result = await startServiceDelayWorkflow(currentEligible);
+  if (result.ok) {
+    summaryBox.innerHTML = `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+  } else {
+    summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;
+  }
+});
 
 collect28DaysButton.addEventListener('click', async () => {
   const result = await request28DaysCollection();
