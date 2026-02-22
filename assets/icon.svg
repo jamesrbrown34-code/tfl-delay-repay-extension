@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128" role="img" aria-label="TfL Delay Claim Assistant icon">
+  <rect width="128" height="128" rx="20" fill="#0f766e"/>
+  <circle cx="64" cy="64" r="42" fill="#ffffff"/>
+  <rect x="24" y="58" width="80" height="12" fill="#0f766e"/>
+  <text x="64" y="49" text-anchor="middle" font-family="Arial, sans-serif" font-size="16" fill="#0f766e">TfL</text>
+  <text x="64" y="91" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#0f766e">Delay</text>
+</svg>

@@ -1,0 +1,99 @@
+:root {
+  font-family: Inter, Arial, sans-serif;
+  color: #1f2937;
+}
+
+body {
+  margin: 0;
+  background: #f9fafb;
+}
+
+.app {
+  width: 380px;
+  padding: 12px;
+}
+
+h1 {
+  font-size: 18px;
+  margin: 0;
+}
+
+h2 {
+  font-size: 14px;
+  margin: 10px 0 6px;
+}
+
+.subtitle {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #4b5563;
+}
+
+.controls {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.toggle-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 12px;
+}
+
+button {
+  border: none;
+  border-radius: 6px;
+  background: #0f766e;
+  color: #fff;
+  padding: 8px 10px;
+  cursor: pointer;
+}
+
+button.secondary {
+  background: #374151;
+}
+
+.summary {
+  margin-top: 10px;
+  background: #ecfeff;
+  border: 1px solid #a5f3fc;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.journeys-list {
+  display: grid;
+  gap: 6px;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.journey-card {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  resize: vertical;
+}
+
+.ad-banner {
+  margin-top: 12px;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px dashed #f59e0b;
+  background: #fffbeb;
+  font-size: 12px;
+}
