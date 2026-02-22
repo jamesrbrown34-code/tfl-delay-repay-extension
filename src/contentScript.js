@@ -422,12 +422,34 @@ async function fillJourneyDetailsStep(state) {
   };
 }
 
+async function fillRefundTypeStep(state) {
+  const refundToCardRadio = document.querySelector('#ahlRefundType');
+  if (!refundToCardRadio) {
+    return { ok: false, error: 'Refund-to-card option was not found on page.' };
+  }
+
+  refundToCardRadio.checked = true;
+  refundToCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
+  refundToCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
+
+  await chrome.storage.local.set({
+    [CLAIM_AUTOFILL_STORAGE_KEY]: {
+      ...state,
+      stage: 'refund-type-selected',
+      refundTypeSelectedAt: new Date().toISOString()
+    }
+  });
+
+  return { ok: true, selected: 'FUL' };
+}
+
 async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
   if (!sdrAutofillState?.active) return;
 
   const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
+  const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
 
   if (inCardSelection) {
     await fillCardSelectionStep(sdrAutofillState, settings);
@@ -436,6 +458,11 @@ async function runServiceDelayAutofill() {
 
   if (inJourneyDetails) {
     await fillJourneyDetailsStep(sdrAutofillState);
+    return;
+  }
+
+  if (inRefundTypeStep) {
+    await fillRefundTypeStep(sdrAutofillState);
   }
 }
 
