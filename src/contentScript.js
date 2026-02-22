@@ -196,6 +196,17 @@ function findNextButtonByText(labelText) {
   });
 }
 
+function clickButtonWithTestModeGuard(button, settings, fallbackMessage) {
+  if (!button) return { ok: false, error: fallbackMessage };
+
+  if (settings?.testMode) {
+    return { ok: true, requiresManualClick: true };
+  }
+
+  setTimeout(() => button.click(), 250);
+  return { ok: true, requiresManualClick: false };
+}
+
 async function fillCardSelectionStep(state, settings) {
   const cardSelect = document.querySelector('#oysterCardId');
   if (!cardSelect) return false;
@@ -221,8 +232,8 @@ async function fillCardSelectionStep(state, settings) {
     }
   });
 
-  setTimeout(() => nextPageButton.click(), 250);
-  return true;
+  const clickResult = clickButtonWithTestModeGuard(nextPageButton, settings, 'Next page button not available.');
+  return clickResult.ok;
 }
 
 function fillJourneyDetailsForm(journey, settings) {
@@ -291,8 +302,13 @@ async function fillJourneyDetailsStep(state) {
     }
   });
 
-  setTimeout(() => nextPageButton.click(), 250);
-  return { ok: true, submitted: journey, remaining: remaining.length };
+  const clickResult = clickButtonWithTestModeGuard(nextPageButton, settings, 'Next Page button was not found on journey details form.');
+  return {
+    ok: clickResult.ok,
+    submitted: journey,
+    remaining: remaining.length,
+    requiresManualClick: clickResult.requiresManualClick
+  };
 }
 
 async function runServiceDelayAutofill() {
@@ -322,6 +338,8 @@ async function startServiceDelayWorkflow(journeys) {
     return { ok: false, error: 'Service delay refunds navigation link not found.' };
   }
 
+  const { settings } = await chrome.storage.local.get('settings');
+
   await chrome.storage.local.set({
     [CLAIM_AUTOFILL_STORAGE_KEY]: {
       active: true,
@@ -333,7 +351,7 @@ async function startServiceDelayWorkflow(journeys) {
   });
 
   serviceDelayLink.click();
-  return { ok: true, queued: journeys.length };
+  return { ok: true, queued: journeys.length, requiresManualClick: Boolean(settings?.testMode) };
 }
 
 async function processBatchStateAfterLoad() {
@@ -387,7 +405,11 @@ async function processBatchStateAfterLoad() {
 
   select.value = nextValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
-  setTimeout(() => submitButton.click(), 300);
+
+  const { settings } = await chrome.storage.local.get('settings');
+  if (!settings?.testMode) {
+    setTimeout(() => submitButton.click(), 300);
+  }
 }
 
 async function startCollectLast28Days() {
@@ -418,9 +440,13 @@ async function startCollectLast28Days() {
 
   select.value = firstValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
-  setTimeout(() => submitButton.click(), 300);
 
-  return { ok: true, queuedRanges: queue.length + 1 };
+  const { settings } = await chrome.storage.local.get('settings');
+  if (!settings?.testMode) {
+    setTimeout(() => submitButton.click(), 300);
+  }
+
+  return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: Boolean(settings?.testMode) };
 }
 
 async function analyseJourneyTable() {

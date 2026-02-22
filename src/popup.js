@@ -151,7 +151,9 @@ submitRefundsButton.addEventListener('click', async () => {
 
   const result = await startServiceDelayWorkflow(currentEligible);
   if (result.ok) {
-    summaryBox.innerHTML = `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+    summaryBox.innerHTML = result.requiresManualClick
+      ? `<p>Started service delay workflow for ${result.queued} journey(s) in test mode. Fields will be populated, but you must manually click page buttons.</p>`
+      : `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
   } else {
     summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;
   }
@@ -160,7 +162,9 @@ submitRefundsButton.addEventListener('click', async () => {
 collect28DaysButton.addEventListener('click', async () => {
   const result = await request28DaysCollection();
   if (result.ok) {
-    summaryBox.innerHTML = '<p>Started 28-day collection. Keep the Oyster tab open while date ranges auto-submit. When done, click Analyse Delays.</p>';
+    summaryBox.innerHTML = result.requiresManualClick
+      ? '<p>Started 28-day collection in test mode. Date ranges are selected automatically, but you must manually click page buttons.</p>'
+      : '<p>Started 28-day collection. Keep the Oyster tab open while date ranges auto-submit. When done, click Analyse Delays.</p>';
   } else {
     summaryBox.innerHTML = '<p>Could not start 28-day collection on this tab. Open Oyster journey history and try again.</p>';
   }
