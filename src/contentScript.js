@@ -199,15 +199,29 @@ function getJourneyKey(journey) {
 }
 
 function parseDdMmYyyyToDate(rawDate) {
-  const [day, month, year] = String(rawDate || '')
-    .split('/')
-    .map((part) => Number(part));
+  const normalized = String(rawDate || '').trim();
+  const ddMmYyyyMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (!ddMmYyyyMatch) return null;
+
+  const day = Number(ddMmYyyyMatch[1]);
+  const month = Number(ddMmYyyyMatch[2]);
+  const year = Number(ddMmYyyyMatch[3]);
+
   if (!day || !month || !year) return null;
 
   const parsed = new Date(year, month - 1, day);
-  return Number.isNaN(parsed.getTime()) ? null : parsed;
+  if (Number.isNaN(parsed.getTime())) return null;
+  if (parsed.getDate() !== day || parsed.getMonth() !== month - 1 || parsed.getFullYear() !== year) return null;
+
+  return parsed;
 }
 
+function formatDateAsDdMmYyyy(date) {
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = String(date.getFullYear());
+  return `${day}/${month}/${year}`;
+}
 
 function extractTimeFromJourneyDate(journey = {}) {
   if (journey?.startTime && Number.isFinite(journey.startTime.hours) && Number.isFinite(journey.startTime.mins)) {
@@ -226,13 +240,18 @@ function extractTimeFromJourneyDate(journey = {}) {
 }
 
 function formatJourneyDate(rawDate) {
-  const parsed = parseDdMmYyyyToDate(rawDate);
-  if (!parsed) return rawDate;
+  const parsedDdMmYyyy = parseDdMmYyyyToDate(rawDate);
+  if (parsedDdMmYyyy) return formatDateAsDdMmYyyy(parsedDdMmYyyy);
 
-  const day = String(parsed.getDate()).padStart(2, '0');
-  const month = String(parsed.getMonth() + 1).padStart(2, '0');
-  const year = String(parsed.getFullYear());
-  return `${day}/${month}/${year}`;
+  const parsedLabel = parseDateLabelToDdMmYyyy(rawDate);
+  if (parsedLabel) return parsedLabel;
+
+  const parsedGeneric = new Date(String(rawDate || '').replace(/(\d{1,2}:\d{2}).*$/, '').trim());
+  if (!Number.isNaN(parsedGeneric.getTime())) {
+    return formatDateAsDdMmYyyy(parsedGeneric);
+  }
+
+  return formatDateAsDdMmYyyy(new Date());
 }
 
 function normalizeStationName(name = '') {
