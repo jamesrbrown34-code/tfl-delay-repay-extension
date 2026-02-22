@@ -852,6 +852,17 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 
+  if (message?.type === 'KILL_AUTOFILL') {
+    chrome.storage.local
+      .remove([CLAIM_AUTOFILL_STORAGE_KEY, 'batchCollection', PENDING_COLLECT_STORAGE_KEY])
+      .then(() => {
+        updateStatusPanel('Kill mode activated', 'All automation queues were cleared for this tab.');
+        sendResponse({ ok: true });
+      })
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
+
   return undefined;
 });
 

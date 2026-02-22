@@ -55,6 +55,10 @@ button.secondary {
   background: #374151;
 }
 
+button.danger {
+  background: #b91c1c;
+}
+
 .summary {
   margin-top: 10px;
   background: #ecfeff;

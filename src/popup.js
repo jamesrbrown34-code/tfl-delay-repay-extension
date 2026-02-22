@@ -3,6 +3,7 @@ import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
 
 const runFullFlowButton = document.getElementById('runFullFlowButton');
 const testModeToggle = document.getElementById('testModeToggle');
+const killModeButton = document.getElementById('killModeButton');
 const autoDetectToggle = document.getElementById('autoDetectToggle');
 const testModeRealJourneysToggle = document.getElementById('testModeRealJourneysToggle');
 const summaryBox = document.getElementById('summaryBox');
@@ -164,6 +165,22 @@ async function refreshWorkflowTracker() {
   renderWorkflowTracker(sdrAutofillState);
 }
 
+
+async function triggerKillMode() {
+  await chrome.storage.local.remove(['sdrAutofillState', 'batchCollection', 'pendingCollectFromMyCards']);
+
+  const tab = await getActiveTfLTab();
+  if (tab?.id) {
+    try {
+      await chrome.tabs.sendMessage(tab.id, { type: 'KILL_AUTOFILL' });
+    } catch (_error) {
+      // The active tab may not be a TfL page/content-script target.
+    }
+  }
+
+  summaryBox.innerHTML = '<p><strong>Kill mode activated.</strong> Cleared all queued automation state. If a TfL page is open, automation has been stopped there too.</p>';
+}
+
 async function waitForBatchCompletion(maxWaitMs = 70000) {
   const start = Date.now();
 
@@ -178,6 +195,16 @@ async function waitForBatchCompletion(maxWaitMs = 70000) {
 
   return { ok: false };
 }
+
+killModeButton.addEventListener('click', async () => {
+  killModeButton.disabled = true;
+  try {
+    await triggerKillMode();
+    await refreshWorkflowTracker();
+  } finally {
+    killModeButton.disabled = false;
+  }
+});
 
 runFullFlowButton.addEventListener('click', async () => {
   runFullFlowButton.disabled = true;
