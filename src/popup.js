@@ -152,7 +152,7 @@ submitRefundsButton.addEventListener('click', async () => {
   const result = await startServiceDelayWorkflow(currentEligible);
   if (result.ok) {
     summaryBox.innerHTML = result.requiresManualClick
-      ? `<p>Started service delay workflow for ${result.queued} journey(s) in test mode. All steps auto-progress except the final Submit button, which you must click manually.</p>`
+      ? `<p>Started service delay workflow for ${result.queued} journey(s) in test mode. Test mode active: final Submit is not clicked. A popup + console log ("refund submitted") will be shown and automation continues to the next journey.</p>`
       : `<p>Started service delay workflow for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
   } else {
     summaryBox.innerHTML = `<p>Could not start service delay workflow: ${result.error}</p>`;

@@ -453,21 +453,72 @@ async function fillRefundTypeStep(state) {
   return { ok: true, selected: 'FUL' };
 }
 
+function showTestModeRefundSubmittedNotice() {
+  console.log('refund submitted');
+
+  const existing = document.querySelector('#sdr-testmode-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'sdr-testmode-toast';
+  toast.textContent = 'refund submitted';
+  toast.style.position = 'fixed';
+  toast.style.right = '16px';
+  toast.style.bottom = '16px';
+  toast.style.padding = '8px 12px';
+  toast.style.background = '#0f766e';
+  toast.style.color = '#fff';
+  toast.style.borderRadius = '6px';
+  toast.style.fontSize = '12px';
+  toast.style.zIndex = '2147483647';
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.remove();
+  }, 2000);
+}
+
 async function fillFinalSubmitStep(state, settings) {
   const finalSubmitButton = findFinalSubmitButton();
   if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
 
   const clickResult = clickFinalSubmitWithTestModeGuard(finalSubmitButton, settings, 'Final Submit button was not found.');
 
+  if (clickResult.requiresManualClick) {
+    showTestModeRefundSubmittedNotice();
+
+    const hasRemainingJourneys = Boolean(state?.queue?.length);
+    const nextStage = hasRemainingJourneys ? 'card-selection' : 'completed';
+
+    await chrome.storage.local.set({
+      [CLAIM_AUTOFILL_STORAGE_KEY]: {
+        ...state,
+        active: hasRemainingJourneys,
+        stage: nextStage,
+        finalSubmitAttemptedAt: new Date().toISOString(),
+        simulatedSubmitAt: new Date().toISOString()
+      }
+    });
+
+    if (hasRemainingJourneys) {
+      const serviceDelayLink = document.querySelector('#navSDR');
+      if (serviceDelayLink) {
+        setTimeout(() => serviceDelayLink.click(), 250);
+      }
+    }
+
+    return { ok: true, requiresManualClick: true, continued: hasRemainingJourneys };
+  }
+
   await chrome.storage.local.set({
     [CLAIM_AUTOFILL_STORAGE_KEY]: {
       ...state,
-      stage: clickResult.requiresManualClick ? 'awaiting-final-submit' : 'submitted',
+      stage: 'submitted',
       finalSubmitAttemptedAt: new Date().toISOString()
     }
   });
 
-  return { ok: clickResult.ok, requiresManualClick: clickResult.requiresManualClick };
+  return { ok: clickResult.ok, requiresManualClick: false };
 }
 
 async function runServiceDelayAutofill() {
