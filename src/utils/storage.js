@@ -3,6 +3,7 @@ const DEFAULT_SETTINGS = {
   autoDetectOnLoad: false,
   showAds: true,
   testMode: false,
+  testModeRealJourneys: false,
   monthlyTracking: {}
 };
 
