@@ -33,30 +33,115 @@ function isWithinClaimWindow(journeyDate, now = new Date()) {
   return parsedDate >= windowStart;
 }
 
+function parseStationPairFromAction(actionText = '') {
+  const match = actionText.match(/(.+?)\s+to\s+(.+)/i);
+  if (!match) return null;
+
+  const from = match[1].trim();
+  const to = match[2].trim();
+  if (!from || !to) return null;
+
+  return { from, to };
+}
+
+function parseDateLabelToDdMmYyyy(text = '') {
+  const normalized = String(text).replace(/\s+/g, ' ').trim();
+  const match = normalized.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
+  if (!match) return null;
+
+  const monthMap = {
+    january: 1,
+    february: 2,
+    march: 3,
+    april: 4,
+    may: 5,
+    june: 6,
+    july: 7,
+    august: 8,
+    september: 9,
+    october: 10,
+    november: 11,
+    december: 12
+  };
+
+  const day = Number(match[1]);
+  const month = monthMap[match[2].toLowerCase()];
+  const year = Number(match[3]);
+  if (!day || !month || !year) return null;
+
+  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
+}
+
+function parseTimeRangeStart(timeCell = '') {
+  const match = String(timeCell).match(/(\d{1,2})[:.](\d{2})\s*[-–]/);
+  if (!match) return null;
+  return {
+    hours: Number(match[1]),
+    mins: Number(match[2])
+  };
+}
+
 function parseJourneyRows() {
   const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  let currentDateLabel = null;
 
   return rows
     .map((row) => {
       const cells = row.querySelectorAll('td');
-      if (cells.length < 6) return null;
+      if (!cells.length) return null;
 
-      const expectedMinutes = Number(extractText(cells[3]));
-      const actualMinutes = Number(extractText(cells[4]));
-      const delayMinutes = Math.max(0, actualMinutes - expectedMinutes);
+      if (cells.length >= 6) {
+        const expectedMinutes = Number(extractText(cells[3]));
+        const actualMinutes = Number(extractText(cells[4]));
+        const delayMinutes = Math.max(0, actualMinutes - expectedMinutes);
 
-      return {
-        journeyDate: extractText(cells[0]),
-        from: extractText(cells[1]),
-        to: extractText(cells[2]),
-        expectedMinutes,
-        actualMinutes,
-        delayMinutes,
-        delayEligible: delayMinutes >= MIN_DELAY_MINUTES,
-        ticketType: extractText(cells[5]),
-        delaySource: 'inferred',
-        zonesCrossed: Number(extractText(cells[6], '1')) || 1
-      };
+        return {
+          journeyDate: extractText(cells[0]),
+          from: extractText(cells[1]),
+          to: extractText(cells[2]),
+          expectedMinutes,
+          actualMinutes,
+          delayMinutes,
+          delayEligible: delayMinutes >= MIN_DELAY_MINUTES,
+          ticketType: extractText(cells[5]),
+          delaySource: 'inferred',
+          zonesCrossed: Number(extractText(cells[6], '1')) || 1
+        };
+      }
+
+      if (cells.length >= 4) {
+        const firstCell = extractText(cells[0]);
+        const actionText = extractText(cells[1]);
+
+        const maybeDate = parseDateLabelToDdMmYyyy(firstCell);
+        if (maybeDate && !actionText.toLowerCase().includes(' to ')) {
+          currentDateLabel = maybeDate;
+          return null;
+        }
+
+        const stationPair = parseStationPairFromAction(actionText);
+        if (!stationPair) return null;
+
+        if (/touch\s+(in|out)|bus journey/i.test(actionText)) return null;
+
+        const startTime = parseTimeRangeStart(firstCell);
+
+        return {
+          journeyDate: currentDateLabel || firstCell,
+          from: stationPair.from,
+          to: stationPair.to,
+          expectedMinutes: null,
+          actualMinutes: null,
+          delayMinutes: MIN_DELAY_MINUTES,
+          delayEligible: true,
+          ticketType: 'PAYG',
+          delaySource: 'statement-journey-action',
+          zonesCrossed: 1,
+          startTime
+        };
+      }
+
+      return null;
     })
     .filter(Boolean);
 }
@@ -124,8 +209,15 @@ function parseDdMmYyyyToDate(rawDate) {
 }
 
 
-function extractTimeFromJourneyDate(journeyDate = '') {
-  const match = String(journeyDate).match(/(\d{1,2}):(\d{2})/);
+function extractTimeFromJourneyDate(journey = {}) {
+  if (journey?.startTime && Number.isFinite(journey.startTime.hours) && Number.isFinite(journey.startTime.mins)) {
+    return {
+      hours: journey.startTime.hours,
+      mins: journey.startTime.mins
+    };
+  }
+
+  const match = String(journey?.journeyDate || '').match(/(\d{1,2}):(\d{2})/);
   if (!match) return { hours: 12, mins: 0 };
   return {
     hours: Number(match[1]),
@@ -264,7 +356,7 @@ function fillJourneyDetailsForm(journey, settings) {
   dateInput.dispatchEvent(new Event('input', { bubbles: true }));
   dateInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-  const startTime = extractTimeFromJourneyDate(journey.journeyDate);
+  const startTime = extractTimeFromJourneyDate(journey);
   const startHour = startTime.hours;
   const startMinute = startTime.mins;
   setSelectValue(hourSelect, startHour);
