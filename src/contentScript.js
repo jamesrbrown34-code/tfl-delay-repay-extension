@@ -216,7 +216,7 @@ function ensureStatusPanel() {
   panel.style.fontSize = '12px';
   panel.style.width = '280px';
   panel.style.boxShadow = '0 4px 14px rgba(0,0,0,0.15)';
-  panel.innerHTML = '<strong>TfL Delay Assistant</strong><div id="tfl-delay-helper-panel-status" style="margin-top:4px;line-height:1.4"></div>';
+  panel.innerHTML = '<strong>TubeRefund</strong><div id="tfl-delay-helper-panel-status" style="margin-top:4px;line-height:1.4"></div>';
   document.body.appendChild(panel);
   return panel;
 }
@@ -601,9 +601,10 @@ async function fillFinalSubmitStep(state, settings) {
     });
 
     if (hasRemainingJourneys) {
-      const serviceDelayLink =
-        document.querySelector('a[href*="/oyster/sdr.do"]') ||
-        document.querySelector('#navSDR');
+      const backButton =
+        Array.from(document.querySelectorAll('a.btn.btn-default')).find((link) => (link.textContent || '').trim().toLowerCase() === 'back') ||
+        document.querySelector('a[href*="/oyster/sdr.do"].btn.btn-default');
+      const serviceDelayLink = backButton || document.querySelector('a[href*="/oyster/sdr.do"]') || document.querySelector('#navSDR');
       if (serviceDelayLink) {
         setTimeout(() => serviceDelayLink.click(), 250);
       }
@@ -611,7 +612,7 @@ async function fillFinalSubmitStep(state, settings) {
 
     updateStatusPanel(
       hasRemainingJourneys ? 'Test mode: loop continues' : 'Test mode complete',
-      hasRemainingJourneys ? `Completed ${state.completed?.length || 0}. Opening Service delay refunds for next journey.` : 'No journeys remaining.'
+      hasRemainingJourneys ? `Completed ${state.completed?.length || 0}. Clicking Back to return to Service delay refunds for next journey.` : 'No journeys remaining.'
     );
 
     return { ok: true, requiresManualClick: true, continued: hasRemainingJourneys };
@@ -832,7 +833,7 @@ function injectTfLHelperPanel() {
     return;
   }
 
-  updateStatusPanel('TfL Delay Assistant active');
+  updateStatusPanel('TubeRefund active');
 }
 
 async function analyseJourneyTable() {
