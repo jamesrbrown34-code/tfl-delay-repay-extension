@@ -577,29 +577,59 @@ async function fillRefundTypeStep(state) {
   return { ok: true, selected: 'FUL' };
 }
 
-function showTestModeRefundSubmittedNotice() {
-  console.log('refund submitted');
-
-  const existing = document.querySelector('#sdr-testmode-toast');
+function showManualSubmitRequiredPopup() {
+  const existing = document.querySelector('#sdr-manual-submit-popup');
   if (existing) existing.remove();
 
-  const toast = document.createElement('div');
-  toast.id = 'sdr-testmode-toast';
-  toast.textContent = 'refund submitted';
-  toast.style.position = 'fixed';
-  toast.style.right = '16px';
-  toast.style.bottom = '16px';
-  toast.style.padding = '8px 12px';
-  toast.style.background = '#0f766e';
-  toast.style.color = '#fff';
-  toast.style.borderRadius = '6px';
-  toast.style.fontSize = '12px';
-  toast.style.zIndex = '2147483647';
-  document.body.appendChild(toast);
+  const popup = document.createElement('div');
+  popup.id = 'sdr-manual-submit-popup';
+  popup.style.position = 'fixed';
+  popup.style.inset = '0';
+  popup.style.background = 'rgba(15, 23, 42, 0.7)';
+  popup.style.zIndex = '2147483647';
+  popup.style.display = 'flex';
+  popup.style.alignItems = 'center';
+  popup.style.justifyContent = 'center';
+  popup.style.padding = '24px';
 
-  setTimeout(() => {
-    toast.remove();
-  }, 2000);
+  const panel = document.createElement('div');
+  panel.style.maxWidth = '680px';
+  panel.style.width = '100%';
+  panel.style.background = '#ffffff';
+  panel.style.color = '#0f172a';
+  panel.style.border = '3px solid #b91c1c';
+  panel.style.borderRadius = '12px';
+  panel.style.padding = '28px';
+  panel.style.boxShadow = '0 20px 45px rgba(0,0,0,0.35)';
+  panel.style.textAlign = 'center';
+
+  const title = document.createElement('h2');
+  title.textContent = 'Action required';
+  title.style.margin = '0 0 12px';
+  title.style.fontSize = '32px';
+
+  const message = document.createElement('p');
+  message.textContent = 'You must click Submit for a valid refund claim.';
+  message.style.margin = '0 0 18px';
+  message.style.fontSize = '24px';
+  message.style.lineHeight = '1.35';
+  message.style.fontWeight = '700';
+
+  const closeButton = document.createElement('button');
+  closeButton.type = 'button';
+  closeButton.textContent = 'Understood';
+  closeButton.style.fontSize = '18px';
+  closeButton.style.padding = '10px 16px';
+  closeButton.style.border = 'none';
+  closeButton.style.borderRadius = '8px';
+  closeButton.style.background = '#0f766e';
+  closeButton.style.color = '#fff';
+  closeButton.style.cursor = 'pointer';
+  closeButton.addEventListener('click', () => popup.remove());
+
+  panel.append(title, message, closeButton);
+  popup.appendChild(panel);
+  document.body.appendChild(popup);
 }
 
 async function fillFinalSubmitStep(state, settings) {
@@ -621,7 +651,7 @@ async function fillFinalSubmitStep(state, settings) {
   });
 
   if (clickResult.requiresManualClick) {
-    showTestModeRefundSubmittedNotice();
+    showManualSubmitRequiredPopup();
 
     const hasRemainingJourneys = Boolean(state?.queue?.length);
     const nextStage = hasRemainingJourneys ? 'card-selection' : 'completed';
