@@ -1,24 +1,50 @@
 import type { CapabilitySet, Settings, Tier } from '../shared/types';
 
 export class TierService {
-  constructor(private readonly tier: Tier) {}
+  private readonly tier: Tier;
+
+  constructor(tier: Tier) {
+    this.tier = tier === 'paid' ? 'paid' : 'free';
+  }
 
   static fromSettings(settings: Settings): TierService {
     return new TierService(settings.tier);
   }
 
+  getCurrentTier(): Tier {
+    return this.tier;
+  }
+
+  isFree(): boolean {
+    return this.tier === 'free';
+  }
+
+  isPaid(): boolean {
+    return this.tier === 'paid';
+  }
+
   capabilities(): CapabilitySet {
     return {
-      canAutoSubmit: this.tier === 'paid',
-      canAccess28Days: true
+      canAutoSubmit: false,
+      canAutoFill: this.isPaid(),
+      canAccess28Days: this.isPaid(),
+      canAccessFullHistory: this.isPaid()
     };
   }
 
   canAutoSubmit(): boolean {
-    return this.capabilities().canAutoSubmit;
+    return false;
+  }
+
+  canAutoFill(): boolean {
+    return this.capabilities().canAutoFill;
   }
 
   canAccess28Days(): boolean {
-    return this.capabilities().canAccess28Days;
+    return this.canAccessFullHistory();
+  }
+
+  canAccessFullHistory(): boolean {
+    return this.capabilities().canAccessFullHistory;
   }
 }

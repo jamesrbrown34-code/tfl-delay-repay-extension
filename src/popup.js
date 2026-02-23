@@ -1,5 +1,6 @@
 import { getEligibleJourneys, getEligibleJourneysIgnoringMinDelay } from './utils/delayEngine.js';
 import { estimateRefund, estimateTotalRefund } from './utils/fareEstimator.js';
+import { TierService } from './utils/tierService.js';
 
 const runFullFlowButton = document.getElementById('runFullFlowButton');
 const testModeToggle = document.getElementById('testModeToggle');
@@ -9,10 +10,30 @@ const testModeRealJourneysToggle = document.getElementById('testModeRealJourneys
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
 const adBanner = document.getElementById('adBanner');
+const currentTierLabel = document.getElementById('currentTierLabel');
+const tierModeInputs = Array.from(document.querySelectorAll('input[name="tierMode"]'));
 
 let currentEligible = [];
 let testModeEnabled = false;
 let testModeRealJourneysEnabled = false;
+let currentTierService = new TierService('free');
+
+function isWithinDays(journeyDate, historyDays, now = new Date()) {
+  const parsed = new Date(journeyDate);
+  if (Number.isNaN(parsed.getTime())) return false;
+
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - historyDays);
+
+  parsed.setHours(0, 0, 0, 0);
+  return parsed >= cutoff;
+}
+
+function applyTierFilter(journeys, tierService) {
+  if (tierService.canAccessFullHistory()) return journeys;
+  return journeys.filter((journey) => isWithinDays(journey.journeyDate, 7));
+}
 
 function renderJourneys(journeys) {
   journeysList.innerHTML = '';
@@ -35,13 +56,18 @@ function renderJourneys(journeys) {
   journeysList.append(...cards);
 }
 
-function renderSummary(journeys) {
+function renderSummary(journeys, tierService) {
   const total = estimateTotalRefund(journeys).toFixed(2);
-  summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible journeys · Estimated total refund: <strong>£${total}</strong></p>`;
+  if (tierService.isPaid()) {
+    summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible claims · Estimated total refund: <strong>£${total}</strong> · Submission progress state: <strong>Ready</strong></p>`;
+    return;
+  }
+
+  summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p><p>Upgrade to enable automatic form filling.</p>`;
 }
 
-function renderWorkflowTracker(state) {
-  if (!state) return;
+function renderWorkflowTracker(state, tierService) {
+  if (!state || !tierService.isPaid()) return;
 
   const completed = state.completed || [];
   const queue = state.queue || [];
@@ -51,6 +77,7 @@ function renderWorkflowTracker(state) {
   tracker.innerHTML = `
     <p><strong>Refund tracker</strong>: ${completed.length} requested, ${queue.length} remaining.</p>
     <p>Expected value requested so far: <strong>£${expectedValue}</strong></p>
+    <p>Submission progress state: <strong>${state.stage || 'unknown'}</strong></p>
   `;
 
   if (state.stage === 'awaiting-final-submit') {
@@ -92,25 +119,27 @@ async function getCompletedBatchData(ignoreMinDelay = false) {
   };
 }
 
-async function request28DaysCollection() {
+async function requestCollection(historyDays) {
   const tab = await getActiveTfLTab();
   if (!tab?.id) return { ok: false };
 
   try {
-    const response = await chrome.tabs.sendMessage(tab.id, { type: 'COLLECT_LAST_28_DAYS' });
+    const response = await chrome.tabs.sendMessage(tab.id, { type: 'COLLECT_JOURNEYS', historyDays });
     return response?.ok ? response : { ok: false };
   } catch (_error) {
     return { ok: false };
   }
 }
 
-async function analyseFromPage() {
+async function analyseFromPage(tierService) {
   if (testModeEnabled) return loadMockJourneys();
 
   const ignoreMinDelay = testModeRealJourneysEnabled;
 
   const batchData = await getCompletedBatchData(ignoreMinDelay);
-  if (batchData) return batchData;
+  if (batchData) {
+    return { ...batchData, eligibleJourneys: applyTierFilter(batchData.eligibleJourneys, tierService) };
+  }
 
   const tab = await getActiveTfLTab();
   if (!tab?.id) return ignoreMinDelay ? { parsedJourneys: [], eligibleJourneys: [], usedRealJourneyTestMode: true } : loadMockJourneys();
@@ -121,7 +150,11 @@ async function analyseFromPage() {
     const eligibleJourneys = ignoreMinDelay
       ? getEligibleJourneysIgnoringMinDelay(response.parsedJourneys || [])
       : response.eligibleJourneys;
-    return { ...response, eligibleJourneys, usedRealJourneyTestMode: ignoreMinDelay };
+    return {
+      ...response,
+      eligibleJourneys: applyTierFilter(eligibleJourneys, tierService),
+      usedRealJourneyTestMode: ignoreMinDelay
+    };
   } catch (_error) {
     return ignoreMinDelay ? { parsedJourneys: [], eligibleJourneys: [], usedRealJourneyTestMode: true } : loadMockJourneys();
   }
@@ -145,7 +178,14 @@ async function startServiceDelayWorkflow(journeys) {
 
 async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
-  const settings = settingsResponse?.settings || { isPaidTier: false, autoDetectOnLoad: false, showAds: true, testMode: false, testModeRealJourneys: false };
+  const settings = settingsResponse?.settings || { tier: 'free', autoDetectOnLoad: false, showAds: true, testMode: false, testModeRealJourneys: false };
+
+  currentTierService = TierService.fromSettings(settings);
+  currentTierLabel.textContent = `Testing Tier Mode: ${currentTierService.isPaid() ? 'Paid' : 'Free'}`;
+
+  tierModeInputs.forEach((input) => {
+    input.checked = input.value === currentTierService.getCurrentTier();
+  });
 
   testModeEnabled = Boolean(settings.testMode);
   testModeToggle.checked = testModeEnabled;
@@ -154,17 +194,16 @@ async function refreshSettings() {
   testModeRealJourneysToggle.checked = testModeRealJourneysEnabled;
 
   autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
-  autoDetectToggle.disabled = !settings.isPaidTier;
+  autoDetectToggle.disabled = !currentTierService.isPaid();
 
-  adBanner.style.display = settings.isPaidTier ? 'none' : 'block';
+  adBanner.style.display = currentTierService.isPaid() ? 'none' : 'block';
 }
 
 async function refreshWorkflowTracker() {
   const { sdrAutofillState } = await chrome.storage.local.get('sdrAutofillState');
   if (!sdrAutofillState) return;
-  renderWorkflowTracker(sdrAutofillState);
+  renderWorkflowTracker(sdrAutofillState, currentTierService);
 }
-
 
 async function triggerKillMode() {
   await chrome.storage.local.remove(['sdrAutofillState', 'batchCollection', 'pendingCollectFromMyCards']);
@@ -210,8 +249,9 @@ runFullFlowButton.addEventListener('click', async () => {
   runFullFlowButton.disabled = true;
 
   try {
-    summaryBox.innerHTML = '<p>Step 1/3: Starting collection for last 28 days…</p>';
-    const collectResult = await request28DaysCollection();
+    const historyDays = currentTierService.canAccessFullHistory() ? 28 : 7;
+    summaryBox.innerHTML = `<p>Step 1/3: Starting collection for last ${historyDays} days…</p>`;
+    const collectResult = await requestCollection(historyDays);
     if (!collectResult.ok) {
       summaryBox.innerHTML = '<p>Could not start full flow. Open My Oyster cards or Journey history and try again.</p>';
       return;
@@ -225,13 +265,13 @@ runFullFlowButton.addEventListener('click', async () => {
     }
 
     summaryBox.innerHTML = '<p>Step 2/3: Analysing eligible journeys…</p>';
-    const { eligibleJourneys, usedMockData, usedBatchData, usedRealJourneyTestMode } = await analyseFromPage();
+    const { eligibleJourneys, usedMockData, usedBatchData, usedRealJourneyTestMode } = await analyseFromPage(currentTierService);
     currentEligible = eligibleJourneys;
     renderJourneys(currentEligible);
-    renderSummary(currentEligible);
+    renderSummary(currentEligible, currentTierService);
 
     if (usedBatchData) {
-      summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled 28-day collection.</p>';
+      summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled collection.</p>';
     }
 
     if (usedMockData) {
@@ -247,16 +287,16 @@ runFullFlowButton.addEventListener('click', async () => {
       return;
     }
 
-    summaryBox.innerHTML += '<p>Step 3/3: Starting service delay auto-fill workflow…</p>';
+    summaryBox.innerHTML += '<p>Step 3/3: Opening service delay refund workflow…</p>';
     const result = await startServiceDelayWorkflow(currentEligible);
     if (!result.ok) {
       summaryBox.innerHTML += `<p>Could not start workflow: ${result.error}</p>`;
       return;
     }
 
-    summaryBox.innerHTML += result.requiresManualClick
-      ? `<p>Started for ${result.queued} journey(s) in test mode. Submit is skipped and loop continues via Service delay refunds.</p>`
-      : `<p>Started for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`;
+    summaryBox.innerHTML += currentTierService.canAutoFill()
+      ? `<p>Started for ${result.queued} journey(s). Keep the TfL tab open while pages auto-fill.</p>`
+      : `<p>Opened service delay refunds for ${result.queued} journey(s). Complete the form manually.</p>`;
     summaryBox.innerHTML += '<p><strong>Final step:</strong> click Submit yourself on the TfL page for a valid claim.</p>';
 
     await refreshWorkflowTracker();
@@ -293,6 +333,17 @@ autoDetectToggle.addEventListener('change', async () => {
   await chrome.runtime.sendMessage({
     type: 'UPDATE_SETTINGS',
     payload: { autoDetectOnLoad: autoDetectToggle.checked }
+  });
+});
+
+tierModeInputs.forEach((input) => {
+  input.addEventListener('change', async () => {
+    if (!input.checked) return;
+    await chrome.runtime.sendMessage({
+      type: 'UPDATE_SETTINGS',
+      payload: { tier: input.value }
+    });
+    await refreshSettings();
   });
 });
 

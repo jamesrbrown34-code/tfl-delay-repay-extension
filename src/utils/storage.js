@@ -1,5 +1,7 @@
+import { TierService } from './tierService.js';
+
 const DEFAULT_SETTINGS = {
-  isPaidTier: false,
+  tier: 'free',
   autoDetectOnLoad: false,
   showAds: true,
   testMode: false,
@@ -9,9 +11,16 @@ const DEFAULT_SETTINGS = {
 
 export async function getSettings() {
   const stored = await chrome.storage.local.get('settings');
-  return {
+  const merged = {
     ...DEFAULT_SETTINGS,
     ...(stored.settings || {})
+  };
+
+  const tierService = TierService.fromSettings(merged);
+  return {
+    ...merged,
+    tier: tierService.getCurrentTier(),
+    isPaidTier: tierService.isPaid()
   };
 }
 

@@ -1,4 +1,5 @@
 import { getSettings, saveSettings } from './utils/storage.js';
+import { TierService } from './utils/tierService.js';
 
 chrome.runtime.onInstalled.addListener(async () => {
   await getSettings();
@@ -9,7 +10,8 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== 'expiry-reminder') return;
 
   const settings = await getSettings();
-  if (!settings.isPaidTier) return;
+  const tierService = TierService.fromSettings(settings);
+  if (!tierService.isPaid()) return;
 
   chrome.notifications.create({
     type: 'basic',
@@ -21,7 +23,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   if (message?.type === 'GET_SETTINGS') {
-    getSettings().then((settings) => sendResponse({ ok: true, settings }));
+    getSettings().then((settings) => {
+      const tierService = TierService.fromSettings(settings);
+      sendResponse({ ok: true, settings, capabilities: tierService.capabilities() });
+    });
     return true;
   }
 

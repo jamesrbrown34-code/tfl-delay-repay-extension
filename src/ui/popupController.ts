@@ -27,7 +27,7 @@ export class PopupController {
   }
 
   async runPaidFlow(journeys: Journey[]): Promise<void> {
-    if (!this.tierService.canAutoSubmit()) {
+    if (!this.tierService.canAutoFill()) {
       this.statusPanel.setStatus('Free tier: auto-submit unavailable.');
       return;
     }
