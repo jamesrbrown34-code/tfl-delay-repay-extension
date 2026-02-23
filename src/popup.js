@@ -9,6 +9,8 @@ const autoDetectToggle = document.getElementById('autoDetectToggle');
 const testModeRealJourneysToggle = document.getElementById('testModeRealJourneysToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
+const eligibleJourneysForManualUploadList = document.getElementById('eligibleJourneysForManualUploadList');
+const eligibleJourneysForManualUploadMeta = document.getElementById('eligibleJourneysForManualUploadMeta');
 const adBanner = document.getElementById('adBanner');
 const currentTierLabel = document.getElementById('currentTierLabel');
 const actualTierLabel = document.getElementById('actualTierLabel');
@@ -16,11 +18,13 @@ const tierModeInputs = Array.from(document.querySelectorAll('input[name="tierMod
 const tokenInput = document.getElementById('tokenInput');
 const tokenSubmitButton = document.getElementById('tokenSubmitButton');
 const tokenMessage = document.getElementById('tokenMessage');
+const ELIGIBLE_JOURNEYS_STORAGE_KEY = 'eligibleJourneysForManualUpload';
 
 let currentEligible = [];
 let testModeEnabled = false;
 let testModeRealJourneysEnabled = false;
 let currentTierService = new TierService('free');
+let currentManualUploadPayload = null;
 const manualTokenTierService = new TierService('free');
 
 function setTokenMessage(text, isError = false) {
@@ -46,6 +50,98 @@ function applyTierFilter(journeys, tierService) {
   return journeys.filter((journey) => isWithinDays(journey.journeyDate, 7));
 }
 
+
+async function persistEligibleJourneysForManualUpload(journeys) {
+  if (!Array.isArray(journeys)) return;
+
+  await chrome.storage.local.set({
+    [ELIGIBLE_JOURNEYS_STORAGE_KEY]: {
+      savedAt: new Date().toISOString(),
+      journeys
+    }
+  });
+
+  await refreshEligibleJourneysForManualUpload();
+}
+
+
+async function clearEligibleJourneysForManualUpload() {
+  await chrome.storage.local.remove(ELIGIBLE_JOURNEYS_STORAGE_KEY);
+}
+
+
+function toManualUploadDateParts(journeyDate) {
+  const parsed = new Date(journeyDate);
+  if (Number.isNaN(parsed.getTime())) {
+    return { date: 'DD/MM/YYYY', hour: '00', minute: '00' };
+  }
+
+  const day = String(parsed.getDate()).padStart(2, '0');
+  const month = String(parsed.getMonth() + 1).padStart(2, '0');
+  const year = parsed.getFullYear();
+  return {
+    date: `${day}/${month}/${year}`,
+    hour: String(parsed.getHours()).padStart(2, '0'),
+    minute: String(parsed.getMinutes()).padStart(2, '0')
+  };
+}
+
+function toDelayParts(delayMinutes) {
+  const safe = Number.isFinite(delayMinutes) && delayMinutes > 0 ? Math.floor(delayMinutes) : 0;
+  const hours = Math.floor(safe / 60);
+  const minutes = safe % 60;
+  return {
+    hours: String(hours).padStart(2, '0'),
+    minutes: String(minutes).padStart(2, '0')
+  };
+}
+
+function renderStoredEligibleJourneys(payload) {
+  if (!eligibleJourneysForManualUploadList || !eligibleJourneysForManualUploadMeta) return;
+
+  const journeys = Array.isArray(payload?.journeys) ? payload.journeys : [];
+  eligibleJourneysForManualUploadList.innerHTML = '';
+
+  if (!journeys.length) {
+    eligibleJourneysForManualUploadMeta.textContent = 'No locally stored journeys.';
+    eligibleJourneysForManualUploadList.innerHTML = '<p>No saved manual-upload journeys.</p>';
+    return;
+  }
+
+  eligibleJourneysForManualUploadMeta.textContent = payload.savedAt
+    ? `Saved at: ${new Date(payload.savedAt).toLocaleString()}`
+    : 'Saved journeys (timestamp unavailable).';
+
+  const cards = journeys.map((journey) => {
+    const card = document.createElement('article');
+    card.className = 'journey-card manual-upload-card';
+    const start = toManualUploadDateParts(journey.journeyDate);
+    const end = toManualUploadDateParts(journey.journeyDate);
+    const delay = toDelayParts(journey.delayMinutes);
+
+    card.innerHTML = `
+      <strong>Journey:</strong> ${journey.journeyDate}: ${journey.from} → ${journey.to}<br>
+      <strong>Estimated refund:</strong> £${estimateRefund(journey).toFixed(2)}
+      <hr>
+      <p><strong>Which service were you travelling on when your journey was delayed?</strong><br>Please select</p>
+      <p><strong>*At which TfL station did you start your journey?</strong><br>${journey.from || 'Please select'}</p>
+      <p><strong>*At which TfL station did you finish your journey?</strong><br>${journey.to || 'Please select'}</p>
+      <p><strong>What date and time did your journey start?</strong><br>${start.date}<br>journey start hour ${start.hour}<br>journey start mins ${start.minute}</p>
+      <p><strong>What date and time did your journey finish?</strong><br>${end.date}<br>journey end hour ${end.hour}<br>journey end mins ${end.minute}</p>
+      <p><strong>Roughly, how long was your journey delayed for?</strong><br>${delay.hours} Hours<br>${delay.minutes} Minutes</p>
+    `;
+    return card;
+  });
+
+  eligibleJourneysForManualUploadList.append(...cards);
+}
+
+async function refreshEligibleJourneysForManualUpload() {
+  const stored = await chrome.storage.local.get(ELIGIBLE_JOURNEYS_STORAGE_KEY);
+  currentManualUploadPayload = stored[ELIGIBLE_JOURNEYS_STORAGE_KEY] || null;
+  renderStoredEligibleJourneys(currentManualUploadPayload);
+}
+
 function renderJourneys(journeys) {
   journeysList.innerHTML = '';
   if (!journeys.length) {
@@ -67,14 +163,23 @@ function renderJourneys(journeys) {
   journeysList.append(...cards);
 }
 
-function renderSummary(journeys, tierService) {
+function renderSummary(journeys, tierService, manualUploadPayload = null) {
   const total = estimateTotalRefund(journeys).toFixed(2);
   if (tierService.isPaid()) {
     summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible claims · Estimated total refund: <strong>£${total}</strong> · Submission progress state: <strong>Ready</strong></p>`;
     return;
   }
 
-  summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p><p>Upgrade to enable automatic form filling.</p>`;
+  const storedCount = Array.isArray(manualUploadPayload?.journeys) ? manualUploadPayload.journeys.length : 0;
+  const savedAtText = manualUploadPayload?.savedAt
+    ? new Date(manualUploadPayload.savedAt).toLocaleString()
+    : 'Not saved yet';
+
+  summaryBox.innerHTML = `
+    <p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p>
+    <p>Free tier is limited to the last 7 days. Upgrade to enable automatic form filling.</p>
+    <p><strong>eligibleJourneysForManualUpload:</strong> ${storedCount} stored · Last saved: <strong>${savedAtText}</strong></p>
+  `;
 }
 
 function renderWorkflowTracker(state, tierService) {
@@ -268,6 +373,9 @@ runFullFlowButton.addEventListener('click', async () => {
   runFullFlowButton.disabled = true;
 
   try {
+    await clearEligibleJourneysForManualUpload();
+    await refreshEligibleJourneysForManualUpload();
+
     const historyDays = currentTierService.canAccessFullHistory() ? 28 : 7;
     summaryBox.innerHTML = `<p>Step 1/3: Starting collection for last ${historyDays} days…</p>`;
     const collectResult = await requestCollection(historyDays);
@@ -285,9 +393,12 @@ runFullFlowButton.addEventListener('click', async () => {
 
     summaryBox.innerHTML = '<p>Step 2/3: Analysing eligible journeys…</p>';
     const { eligibleJourneys, usedMockData, usedBatchData, usedRealJourneyTestMode } = await analyseFromPage(currentTierService);
-    currentEligible = eligibleJourneys;
+    currentEligible = currentTierService.canAccessFullHistory() ? eligibleJourneys : eligibleJourneys.filter((journey) => isWithinDays(journey.journeyDate, 7));
+    if (!currentTierService.isPaid()) {
+      await persistEligibleJourneysForManualUpload(currentEligible);
+    }
     renderJourneys(currentEligible);
-    renderSummary(currentEligible, currentTierService);
+    renderSummary(currentEligible, currentTierService, currentManualUploadPayload);
 
     if (usedBatchData) {
       summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled collection.</p>';
@@ -304,6 +415,10 @@ runFullFlowButton.addEventListener('click', async () => {
     if (!currentEligible.length) {
       summaryBox.innerHTML += '<p>No eligible journeys to submit.</p>';
       return;
+    }
+
+    if (!currentTierService.isPaid()) {
+      summaryBox.innerHTML += '<p>Eligible journeys were saved locally so you can manually upload them later.</p>';
     }
 
     summaryBox.innerHTML += '<p>Step 3/3: Opening service delay refund workflow…</p>';
@@ -384,3 +499,4 @@ if (tokenSubmitButton) {
 
 refreshSettings();
 refreshWorkflowTracker();
+refreshEligibleJourneysForManualUpload();

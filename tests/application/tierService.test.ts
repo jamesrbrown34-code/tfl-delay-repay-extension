@@ -61,4 +61,27 @@ describe('TierService capability gating', () => {
     expect(free.canAccessFullHistory()).toBe(false);
     expect(paid.canAccessFullHistory()).toBe(true);
   });
+
+  it('returns a fresh capability snapshot each call to avoid accidental external mutation bleed', () => {
+    const paid = new TierService('paid');
+
+    const first = paid.capabilities();
+    first.canAutoFill = false;
+
+    const second = paid.capabilities();
+    expect(second.canAutoFill).toBe(true);
+  });
+
+  it('keeps wrapper methods consistent with the capability object across tiers', () => {
+    for (const tier of ['free', 'paid'] as const) {
+      const service = new TierService(tier);
+      const caps = service.capabilities();
+
+      expect(service.canAutoFill()).toBe(caps.canAutoFill);
+      expect(service.canAccessFullHistory()).toBe(caps.canAccessFullHistory);
+      expect(service.canAccess28Days()).toBe(caps.canAccess28Days);
+      expect(service.canAutoSubmit()).toBe(caps.canAutoSubmit);
+    }
+  });
+
 });

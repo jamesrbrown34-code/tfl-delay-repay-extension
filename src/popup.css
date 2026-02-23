@@ -129,3 +129,21 @@ textarea {
 .actual-tier {
   color: #1d4ed8;
 }
+
+
+.manual-upload-meta {
+  font-size: 12px;
+  color: #374151;
+  margin-bottom: 6px;
+}
+
+
+.manual-upload-card p {
+  margin: 6px 0;
+}
+
+.manual-upload-card hr {
+  border: 0;
+  border-top: 1px solid #e5e7eb;
+  margin: 8px 0;
+}
