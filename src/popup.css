@@ -108,8 +108,19 @@ textarea {
   margin-top: 8px;
 }
 
-.upgrade-links stripe-buy-button {
+.upgrade-links a {
   display: block;
+  text-decoration: none;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f766e;
+}
+
+.upgrade-links a:hover {
+  background: #115e59;
 }
 
 .tier-mode {

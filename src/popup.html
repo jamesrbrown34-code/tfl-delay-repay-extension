@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TubeRefund</title>
     <link rel="stylesheet" href="popup.css" />
-    <script async src="https://js.stripe.com/v3/buy-button.js"></script>
   </head>
   <body>
     <main class="app">
@@ -75,16 +74,8 @@
       <aside id="adBanner" class="ad-banner">
         <strong>Ad:</strong> Upgrade to premium for auto-detection, monthly summaries, and no ads.
         <div class="upgrade-links" aria-label="Stripe upgrade options">
-          <stripe-buy-button
-            buy-button-id="buy_btn_1T42mrKcWuqi5tFZjBn6E0pl"
-            publishable-key="pk_live_51T41umKcWuqi5tFZTOPgYE7vmCFZDQyHruxIrojSJmMhEqo7hJXMXs09iGfgXYYi42weMPA9Aa3Np31qsiF9w63V00YBfF1lvi"
-          >
-          </stripe-buy-button>
-          <stripe-buy-button
-            buy-button-id="buy_btn_1T42oQKcWuqi5tFZSgmgvppt"
-            publishable-key="pk_live_51T41umKcWuqi5tFZTOPgYE7vmCFZDQyHruxIrojSJmMhEqo7hJXMXs09iGfgXYYi42weMPA9Aa3Np31qsiF9w63V00YBfF1lvi"
-          >
-          </stripe-buy-button>
+          <a href="https://buy.stripe.com/14A8wQ1pM8ycbL45K8ejK01" target="_blank" rel="noopener noreferrer">Upgrade Yearly</a>
+          <a href="https://buy.stripe.com/eVq8wQgkGeWA3ey4G4ejK00" target="_blank" rel="noopener noreferrer">Upgrade Monthly</a>
         </div>
       </aside>
     </main>
