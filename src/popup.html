@@ -12,6 +12,7 @@
         <h1>TubeRefund</h1>
         <p class="subtitle">Collect, analyse, and submit eligible delay journeys in one flow.</p>
         <p class="tier-mode" id="currentTierLabel">Testing Tier Mode: Free</p>
+        <p class="tier-mode actual-tier" id="actualTierLabel">Actual Tier: Free</p>
       </header>
 
       <section class="controls">
@@ -41,6 +42,14 @@
           <input id="autoDetectToggle" type="checkbox" />
           Paid: Auto-detect on page load
         </label>
+
+        <fieldset class="tier-toggle" id="manualTokenGroup">
+          <legend>Manual Paid Token (MVP)</legend>
+          <label for="tokenInput">Paste token</label>
+          <input id="tokenInput" type="text" placeholder="Base64 token" />
+          <button id="tokenSubmitButton" type="button">Activate Paid Tier</button>
+          <p id="tokenMessage" aria-live="polite"></p>
+        </fieldset>
       </section>
 
       <section class="summary" id="summaryBox">
