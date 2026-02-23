@@ -363,6 +363,17 @@ input[type='checkbox'] {
   margin: 8px 0;
 }
 
+
+.testing-panel {
+  display: grid;
+  gap: 10px;
+  background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+}
+
+.testing-panel h2 {
+  margin-bottom: 0;
+}
+
 @media (max-width: 420px) {
   .app {
     width: min(400px, 100vw);
