@@ -102,6 +102,38 @@ textarea {
   font-size: 12px;
 }
 
+.upgrade-links {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.upgrade-links a {
+  display: block;
+  text-decoration: none;
+  text-align: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  font-weight: 600;
+  color: #ffffff;
+  background: #0f766e;
+}
+
+.upgrade-links a:hover {
+  background: #115e59;
+}
+
+.plan-title {
+  display: block;
+}
+
+.plan-subtitle {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
 .tier-mode {
   margin: 6px 0 0;
   font-size: 12px;
