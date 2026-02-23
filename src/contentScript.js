@@ -17,6 +17,7 @@ import {
   parseTimeRangeEnd,
   parseTimeRangeStart
 } from './core/timeUtils.js';
+import { SELECTORS } from './content/selectors.js';
 
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
@@ -27,12 +28,12 @@ function extractText(node, fallback = '') {
 }
 
 function parseJourneyRows() {
-  const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  const rows = Array.from(document.querySelectorAll(SELECTORS.journeyHistory.tableRows));
   let currentDateLabel = null;
 
   return rows
     .map((row) => {
-      const cells = row.querySelectorAll('td');
+      const cells = row.querySelectorAll(SELECTORS.journeyHistory.tableCells);
       if (!cells.length) return null;
 
       if (cells.length >= 6) {
@@ -102,7 +103,7 @@ function isTfLJourneyHistoryPage() {
 }
 
 function isMyOysterCardsPage() {
-  const heading = document.querySelector('h1');
+  const heading = document.querySelector(SELECTORS.journeyHistory.pageHeading);
   const headingText = (heading?.textContent || '').trim().toLowerCase();
   const path = window.location.pathname.toLowerCase();
   return headingText === 'my oyster cards' || path.includes('/myoystercards');
@@ -128,7 +129,7 @@ function getReadableWorkflowStage(stage = '') {
 function ensureStatusPanel() {
   if (!isExpectedTfLPage()) return null;
 
-  let panel = document.querySelector('#tfl-delay-helper-panel');
+  let panel = document.querySelector(SELECTORS.navigation.helperPanel);
   if (panel) return panel;
 
   panel = document.createElement('div');
@@ -153,7 +154,7 @@ function updateStatusPanel(status, detail = '') {
   const panel = ensureStatusPanel();
   if (!panel) return;
 
-  const statusNode = panel.querySelector('#tfl-delay-helper-panel-status');
+  const statusNode = panel.querySelector(SELECTORS.navigation.helperPanelStatus);
   if (!statusNode) return;
 
   statusNode.innerHTML = detail ? `${status}<br><span style="opacity:0.9">${detail}</span>` : status;
@@ -175,7 +176,7 @@ function parseOptionRange(optionValue) {
 }
 
 function getDateRangeOptionsForLast28Days() {
-  const select = document.querySelector('#date-range');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
   if (!select) return [];
 
   const cutoff = new Date();
@@ -228,10 +229,10 @@ function setSelectValue(select, value) {
 }
 
 function ensureOysterCardTypeSelected() {
-  const oysterCardRadio = document.querySelector('#oysterCardType');
+  const oysterCardRadio = document.querySelector(SELECTORS.serviceDelayForm.oysterCardTypeRadio);
   if (!oysterCardRadio) return false;
 
-  const oysterCardLabel = document.querySelector('label[for="oysterCardType"]');
+  const oysterCardLabel = document.querySelector(SELECTORS.serviceDelayForm.oysterCardTypeLabel);
   if (oysterCardLabel) oysterCardLabel.click();
   oysterCardRadio.click();
   oysterCardRadio.checked = true;
@@ -245,7 +246,7 @@ function getFirstOysterCardOption(select) {
 }
 
 function findNextButtonByText(labelText) {
-  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
+  return Array.from(document.querySelectorAll(SELECTORS.buttons.submitControls)).find((element) => {
     const text = (element.textContent || element.value || '').toLowerCase().trim();
     return text === labelText.toLowerCase();
   });
@@ -261,10 +262,10 @@ function logTestMode(event, details = {}) {
 }
 
 function findFinalSubmitButton() {
-  const byValue = document.querySelector('button[type="submit"][value="Submit"],input[type="submit"][value="Submit"]');
+  const byValue = document.querySelector(SELECTORS.buttons.finalSubmitByValue);
   if (byValue) return byValue;
 
-  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
+  return Array.from(document.querySelectorAll(SELECTORS.buttons.submitControls)).find((element) => {
     const text = (element.textContent || element.value || '').toLowerCase().trim();
     return text === 'submit';
   }) || null;
@@ -273,7 +274,7 @@ function findFinalSubmitButton() {
 async function fillCardSelectionStep(state, settings) {
   ensureOysterCardTypeSelected();
 
-  const cardSelect = document.querySelector('#oysterCardId');
+  const cardSelect = document.querySelector(SELECTORS.serviceDelayForm.oysterCardSelect);
   if (!cardSelect) return false;
 
   const preferredCardId = settings?.serviceDelayCardId;
@@ -287,7 +288,7 @@ async function fillCardSelectionStep(state, settings) {
     }
   }
 
-  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
+  const nextPageButton = document.querySelector(SELECTORS.buttons.submitButton) || findNextButtonByText('next page');
   if (!nextPageButton) return false;
 
   await chrome.storage.local.set({
@@ -302,17 +303,17 @@ async function fillCardSelectionStep(state, settings) {
 }
 
 function fillJourneyDetailsForm(journey, settings) {
-  const lineSelect = document.querySelector('#tflNetworkLine');
-  const startSelect = document.querySelector('#startStationNlc');
-  const endSelect = document.querySelector('#endStationNlc');
-  const dateInput = document.querySelector('#journeyStartDate');
-  const hourSelect = document.querySelector('#journeyStartDate_hh');
-  const minuteSelect = document.querySelector('#journeyStartDate_mins');
-  const endDateInput = document.querySelector('#journeyEndDate');
-  const endHourSelect = document.querySelector('#journeyEndDate_hh');
-  const endMinuteSelect = document.querySelector('#journeyEndDate_mins');
-  const delayHourSelect = document.querySelector('#lengthOfDelay_hh');
-  const delayMinuteSelect = document.querySelector('#lengthOfDelay_mins');
+  const lineSelect = document.querySelector(SELECTORS.serviceDelayForm.networkLineSelect);
+  const startSelect = document.querySelector(SELECTORS.serviceDelayForm.startStationSelect);
+  const endSelect = document.querySelector(SELECTORS.serviceDelayForm.endStationSelect);
+  const dateInput = document.querySelector(SELECTORS.serviceDelayForm.journeyStartDateInput);
+  const hourSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyStartHourSelect);
+  const minuteSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyStartMinuteSelect);
+  const endDateInput = document.querySelector(SELECTORS.serviceDelayForm.journeyEndDateInput);
+  const endHourSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyEndHourSelect);
+  const endMinuteSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyEndMinuteSelect);
+  const delayHourSelect = document.querySelector(SELECTORS.serviceDelayForm.delayHourSelect);
+  const delayMinuteSelect = document.querySelector(SELECTORS.serviceDelayForm.delayMinuteSelect);
 
   if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !endDateInput || !endHourSelect || !endMinuteSelect || !delayHourSelect || !delayMinuteSelect) {
     return { ok: false, error: 'Service delay form fields were not found.' };
@@ -364,7 +365,7 @@ async function fillJourneyDetailsStep(state) {
   const fillResult = fillJourneyDetailsForm(journey, settings);
   if (!fillResult.ok) return fillResult;
 
-  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
+  const nextPageButton = document.querySelector(SELECTORS.buttons.submitButton) || findNextButtonByText('next page');
   if (!nextPageButton) return { ok: false, error: 'Next Page button was not found on journey details form.' };
 
   const remaining = state.queue.slice(1);
@@ -388,7 +389,7 @@ async function fillJourneyDetailsStep(state) {
 }
 
 async function fillRefundTypeStep(state) {
-  const refundToCardRadio = document.querySelector('#ahlRefundType');
+  const refundToCardRadio = document.querySelector(SELECTORS.serviceDelayForm.refundToCardRadio);
   if (!refundToCardRadio) {
     return { ok: false, error: 'Refund-to-card option was not found on page.' };
   }
@@ -409,7 +410,7 @@ async function fillRefundTypeStep(state) {
 }
 
 function showFinalSubmitManualNotice() {
-  const existing = document.querySelector('#sdr-final-submit-toast');
+  const existing = document.querySelector(SELECTORS.navigation.finalSubmitToast);
   if (existing) existing.remove();
 
   const toast = document.createElement('div');
@@ -453,9 +454,9 @@ async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
   if (!sdrAutofillState?.active) return;
 
-  const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
-  const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
-  const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
+  const inCardSelection = Boolean(document.querySelector(SELECTORS.serviceDelayForm.oysterCardSelect));
+  const inJourneyDetails = Boolean(document.querySelector(SELECTORS.serviceDelayForm.networkLineSelect));
+  const inRefundTypeStep = Boolean(document.querySelector(SELECTORS.serviceDelayForm.refundToCardRadio));
   const inFinalSubmitStep = Boolean(findFinalSubmitButton());
 
   if (inCardSelection) {
@@ -487,7 +488,7 @@ async function startServiceDelayWorkflow(journeys) {
     return { ok: false, error: 'No journeys supplied for service delay workflow.' };
   }
 
-  const serviceDelayLink = document.querySelector('#navSDR');
+  const serviceDelayLink = document.querySelector(SELECTORS.navigation.serviceDelayLink);
   if (!serviceDelayLink) {
     return { ok: false, error: 'Service delay refunds navigation link not found.' };
   }
@@ -554,8 +555,8 @@ async function processBatchStateAfterLoad() {
     }
   });
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
 
   if (!select || !submitButton) return;
 
@@ -569,7 +570,7 @@ async function processBatchStateAfterLoad() {
 
 async function startCollectLast28Days() {
   if (isMyOysterCardsPage()) {
-    const journeyHistoryLink = document.querySelector('a[href*="journeyHistoryThrottle.do"]');
+    const journeyHistoryLink = document.querySelector(SELECTORS.journeyHistory.viewJourneyHistoryLink);
     if (!journeyHistoryLink) {
       return { ok: false, error: 'View journey history link not found on My Oyster cards page.' };
     }
@@ -586,8 +587,8 @@ async function startCollectLast28Days() {
     return { ok: true, redirected: true, requiresManualClick: false };
   }
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
 
   if (!select || !submitButton) {
     return { ok: false, error: 'Date range controls not found on page.' };
@@ -625,8 +626,8 @@ async function startCollectFromPendingNavigation() {
   if (!pendingCollectFromMyCards?.active) return;
   if (!isTfLJourneyHistoryPage()) return;
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
   if (!select || !submitButton) return;
 
   await chrome.storage.local.remove(PENDING_COLLECT_STORAGE_KEY);
