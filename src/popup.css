@@ -116,11 +116,22 @@ textarea {
   border-radius: 6px;
   font-weight: 600;
   color: #ffffff;
-  background: #0f766e;
+  background: #b45309;
+  border: 1px solid #92400e;
+  box-shadow: 0 1px 0 rgba(17, 24, 39, 0.18);
 }
 
 .upgrade-links a:hover {
-  background: #115e59;
+  background: #92400e;
+}
+
+.upgrade-links a:focus-visible {
+  outline: 2px solid #fcd34d;
+  outline-offset: 2px;
+}
+
+.upgrade-links a.upgrade-cta .plan-title {
+  letter-spacing: 0.1px;
 }
 
 .plan-title {
