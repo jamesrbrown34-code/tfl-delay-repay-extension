@@ -102,6 +102,16 @@ textarea {
   font-size: 12px;
 }
 
+.upgrade-links {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.upgrade-links stripe-buy-button {
+  display: block;
+}
+
 .tier-mode {
   margin: 6px 0 0;
   font-size: 12px;
