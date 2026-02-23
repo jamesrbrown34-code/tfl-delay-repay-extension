@@ -1,10 +1,12 @@
 import { SELECTORS } from '../selectors.js';
+import { SystemClock } from '../../core/clock.js';
 
 export class ServiceDelayWorkflow {
-  constructor(stateRepository, domAdapter, statusPanel) {
+  constructor(stateRepository, domAdapter, statusPanel, clock = new SystemClock()) {
     this.stateRepository = stateRepository;
     this.domAdapter = domAdapter;
     this.statusPanel = statusPanel;
+    this.clock = clock;
   }
 
   findNextButtonByText(labelText) {
@@ -146,7 +148,7 @@ export class ServiceDelayWorkflow {
         queue: remaining,
         completed: [...(state.completed || []), journey],
         stage: remaining.length ? 'card-selection' : 'completed',
-        lastSubmittedAt: new Date().toISOString()
+        lastSubmittedAt: this.clock.now().toISOString()
       }
     });
 
@@ -173,7 +175,7 @@ export class ServiceDelayWorkflow {
       [this.domAdapter.claimAutofillStorageKey]: {
         ...state,
         stage: 'refund-type-selected',
-        refundTypeSelectedAt: new Date().toISOString()
+        refundTypeSelectedAt: this.clock.now().toISOString()
       }
     });
 
@@ -191,7 +193,7 @@ export class ServiceDelayWorkflow {
       [this.domAdapter.claimAutofillStorageKey]: {
         ...state,
         stage: 'awaiting-final-submit',
-        finalSubmitPromptedAt: new Date().toISOString()
+        finalSubmitPromptedAt: this.clock.now().toISOString()
       }
     });
 

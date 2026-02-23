@@ -1,4 +1,5 @@
 import { isWithinClaimWindow } from './dateUtils.js';
+import { SystemClock } from './clock.js';
 
 export const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
 export const CONCESSION_KEYWORDS = [
@@ -21,9 +22,11 @@ export function getEligibleJourneys(
   {
     isWithinClaimWindowFn = isWithinClaimWindow,
     isConcessionFareFn = isConcessionFare,
-    now = new Date()
+    clock = new SystemClock()
   } = {}
 ) {
+  const now = clock.now();
+
   return journeys
     .filter((journey) => journey.delayEligible)
     .filter((journey) => isWithinClaimWindowFn(journey.journeyDate, now))

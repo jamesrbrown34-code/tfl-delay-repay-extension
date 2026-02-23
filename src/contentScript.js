@@ -17,6 +17,7 @@ import {
   parseTimeRangeEnd,
   parseTimeRangeStart
 } from './core/timeUtils.js';
+import { SystemClock } from './core/clock.js';
 import { SELECTORS } from './content/selectors.js';
 import { ServiceDelayWorkflow } from './content/workflow/serviceDelayWorkflow.js';
 import { StatusPanel } from './content/ui/statusPanel.js';
@@ -25,6 +26,7 @@ import { detectPageType, PAGE_TYPES } from './content/pageDetector.js';
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
 const PENDING_COLLECT_STORAGE_KEY = 'pendingCollectFromMyCards';
+const clock = new SystemClock();
 
 const statusPanel = new StatusPanel({
   getPageType: detectPageType
@@ -454,7 +456,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       update: (status, detail) => statusPanel.update(status, detail),
       showWorkflowProgress: (completed, remaining) => statusPanel.showWorkflowProgress(completed, remaining),
       showFinalSubmitManualNotice
-    }
+    },
+    clock
   );
 
   await serviceDelayWorkflow.handlePage();
