@@ -34,6 +34,24 @@ describe('journeyWorkflow', () => {
     expect(result[0].journeyDate).toBe('2025-02-08');
   });
 
+  it('uses midnight-normalized cutoff so same-day timestamps are included', () => {
+    const journeys = [
+      buildJourney({ journeyDate: '2025-02-01T00:00:00.000Z', from: 'A', to: 'B' }),
+      buildJourney({ journeyDate: '2025-01-31T23:59:59.999Z', from: 'C', to: 'D' })
+    ];
+
+    const result = filterJourneysByTier(journeys, new TierService('free'), now);
+    expect(result.map((journey) => journey.from)).toEqual(['A']);
+  });
+
+  it('keeps malformed dates in paid mode because no history filter is applied', () => {
+    const journeys = [buildJourney({ journeyDate: 'not-a-date' }), buildJourney({ journeyDate: '2025-02-08' })];
+    const result = filterJourneysByTier(journeys, new TierService('paid'), now);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].journeyDate).toBe('not-a-date');
+  });
+
   it('gates auto-fill strictly to paid tier', () => {
     expect(shouldAutoFill(new TierService('free'))).toBe(false);
     expect(shouldAutoFill(new TierService('paid'))).toBe(true);
@@ -45,6 +63,14 @@ describe('journeyWorkflow', () => {
       eligibleClaims: 2,
       estimatedTotalRefund: 12.34,
       submissionProgressState: 'in_progress'
+    });
+  });
+
+  it('supports summaries for zero journeys and negative totals (debt/reversal scenarios)', () => {
+    expect(buildClaimSummary([], -1.23, 'blocked')).toEqual({
+      eligibleClaims: 0,
+      estimatedTotalRefund: -1.23,
+      submissionProgressState: 'blocked'
     });
   });
 

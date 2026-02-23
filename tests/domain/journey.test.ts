@@ -76,4 +76,44 @@ describe('journey domain', () => {
     expect(parseStatementAction('Paddington -> Baker Street')).toBeNull();
     expect(parseStatementAction('')).toBeNull();
   });
+
+  it('prefers explicit delayMinutes over computed values when both are provided', () => {
+    const journey = createJourney({
+      journeyDate: '2025-01-10',
+      from: 'A',
+      to: 'B',
+      expectedMinutes: 10,
+      actualMinutes: 40,
+      delayMinutes: 3
+    });
+
+    expect(journey.delayMinutes).toBe(3);
+  });
+
+  it('defaults nullable timing and optional fields safely', () => {
+    const journey = createJourney({
+      journeyDate: '2025-01-10',
+      from: 'A',
+      to: 'B',
+      expectedMinutes: null,
+      actualMinutes: null,
+      ticketType: undefined,
+      zonesCrossed: undefined,
+      source: undefined
+    });
+
+    expect(journey.expectedMinutes).toBeNull();
+    expect(journey.actualMinutes).toBeNull();
+    expect(journey.ticketType).toBe('PAYG');
+    expect(journey.zonesCrossed).toBe(1);
+    expect(journey.source).toBe('history-table');
+  });
+
+  it('splits statement actions on first usable "to" separator', () => {
+    expect(parseStatementAction("Kentish Town to King's Cross to Moorgate")).toEqual({
+      from: 'Kentish Town',
+      to: "King's Cross to Moorgate"
+    });
+  });
+
 });

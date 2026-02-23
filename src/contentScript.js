@@ -236,6 +236,20 @@ function ensureStatusPanel() {
   return panel;
 }
 
+function formatManualUploadStatus(payload) {
+  const journeys = Array.isArray(payload?.journeys) ? payload.journeys : [];
+  if (!journeys.length) return 'No eligibleJourneysForManualUpload saved yet. Run Full Flow from the extension popup.';
+
+  const savedAt = payload?.savedAt ? new Date(payload.savedAt).toLocaleString() : 'unknown time';
+  const preview = journeys
+    .slice(0, 2)
+    .map((journey) => `${journey.from} → ${journey.to} (${journey.journeyDate})`)
+    .join(' · ');
+
+  const extraCount = journeys.length > 2 ? ` +${journeys.length - 2} more` : '';
+  return `eligibleJourneysForManualUpload: ${journeys.length} saved at ${savedAt}. ${preview}${extraCount}`;
+}
+
 function updateStatusPanel(status, detail = '') {
   const panel = ensureStatusPanel();
   if (!panel) return;
@@ -700,7 +714,9 @@ async function startServiceDelayWorkflow(journeys) {
     updateStatusPanel('Starting service delay workflow', `Queued ${journeys.length} journey(s) for auto-fill.`);
   } else {
     await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
-    updateStatusPanel('Service delay refunds opened', 'Upgrade to enable automatic form filling. Continue manually on this page.');
+    const { eligibleJourneysForManualUpload } = await chrome.storage.local.get('eligibleJourneysForManualUpload');
+    const manualDetail = formatManualUploadStatus(eligibleJourneysForManualUpload);
+    updateStatusPanel('Service delay refunds opened', `Upgrade to enable automatic form filling. Continue manually on this page.<br><span style="opacity:0.95">${manualDetail}</span>`);
   }
 
   serviceDelayLink.click();
@@ -854,7 +870,10 @@ function injectTfLHelperPanel() {
       if (tierService.canAutoFill) {
         updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
       } else {
-        updateStatusPanel('Service delay refunds page detected', 'Upgrade to enable automatic form filling.');
+        chrome.storage.local.get('eligibleJourneysForManualUpload').then(({ eligibleJourneysForManualUpload }) => {
+          const detail = `Upgrade to enable automatic form filling.<br><span style="opacity:0.95">${formatManualUploadStatus(eligibleJourneysForManualUpload)}</span>`;
+          updateStatusPanel('Service delay refunds page detected', detail);
+        });
       }
     });
     return;
