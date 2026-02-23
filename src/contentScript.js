@@ -13,6 +13,21 @@ const CONCESSION_KEYWORDS = [
   'free travel'
 ];
 
+function normalizeTier(rawTier) {
+  return rawTier === 'paid' ? 'paid' : 'free';
+}
+
+function getTierCapabilities(settings = {}) {
+  const tier = normalizeTier(settings?.tier);
+  const isPaid = tier === 'paid';
+  return {
+    tier,
+    isPaid,
+    canAutoFill: isPaid,
+    canAccessFullHistory: isPaid
+  };
+}
+
 function extractText(node, fallback = '') {
   return (node?.textContent || fallback).trim();
 }
@@ -246,13 +261,25 @@ function parseOptionRange(optionValue) {
   return { start, end };
 }
 
-function getDateRangeOptionsForLast28Days() {
+function isWithinHistoryDays(journeyDate, historyDays, now = new Date()) {
+  const parsedDate = new Date(journeyDate);
+  if (Number.isNaN(parsedDate.getTime())) return false;
+
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setDate(cutoff.getDate() - historyDays);
+
+  parsedDate.setHours(0, 0, 0, 0);
+  return parsedDate >= cutoff;
+}
+
+function getDateRangeOptionsForWindow(historyDays = CLAIM_WINDOW_DAYS) {
   const select = document.querySelector('#date-range');
   if (!select) return [];
 
   const cutoff = new Date();
   cutoff.setHours(0, 0, 0, 0);
-  cutoff.setDate(cutoff.getDate() - CLAIM_WINDOW_DAYS);
+  cutoff.setDate(cutoff.getDate() - historyDays);
 
   return Array.from(select.options)
     .map((option) => {
@@ -262,6 +289,11 @@ function getDateRangeOptionsForLast28Days() {
       return option.value;
     })
     .filter(Boolean);
+}
+
+
+function estimateSummaryTotal(journeys = []) {
+  return journeys.reduce((sum, journey) => sum + (Math.max(0, Number(journey.delayMinutes) || 0) * 0.15), 0);
 }
 
 function getJourneyKey(journey) {
@@ -609,7 +641,8 @@ async function fillFinalSubmitStep(state) {
 
 async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
-  if (!sdrAutofillState?.active) return;
+  const tierService = getTierCapabilities(settings || {});
+  if (!tierService.canAutoFill || !sdrAutofillState?.active) return;
 
   const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
@@ -651,20 +684,27 @@ async function startServiceDelayWorkflow(journeys) {
   }
 
   const { settings } = await chrome.storage.local.get('settings');
+  const tierService = getTierCapabilities(settings || {});
 
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      active: true,
-      startedAt: new Date().toISOString(),
-      stage: 'card-selection',
-      queue: journeys,
-      completed: []
-    }
-  });
+  if (tierService.canAutoFill) {
+    await chrome.storage.local.set({
+      [CLAIM_AUTOFILL_STORAGE_KEY]: {
+        active: true,
+        startedAt: new Date().toISOString(),
+        stage: 'card-selection',
+        queue: journeys,
+        completed: []
+      }
+    });
 
-  updateStatusPanel('Starting service delay workflow', `Queued ${journeys.length} journey(s) for auto-fill.`);
+    updateStatusPanel('Starting service delay workflow', `Queued ${journeys.length} journey(s) for auto-fill.`);
+  } else {
+    await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
+    updateStatusPanel('Service delay refunds opened', 'Upgrade to enable automatic form filling. Continue manually on this page.');
+  }
+
   serviceDelayLink.click();
-  return { ok: true, queued: journeys.length, requiresManualClick: Boolean(settings?.testMode) };
+  return { ok: true, queued: journeys.length, requiresManualClick: true, canAutoFill: tierService.canAutoFill };
 }
 
 async function processBatchStateAfterLoad() {
@@ -685,7 +725,8 @@ async function processBatchStateAfterLoad() {
 
   const remainingQueue = [...(batchCollection.queue || [])];
   if (!remainingQueue.length) {
-    updateStatusPanel('Collection complete', `Collected ${mergedJourneys.length} journeys across the last 28 days.`);
+    const collectedDays = Number(batchCollection.historyDays) || CLAIM_WINDOW_DAYS;
+    updateStatusPanel('Collection complete', `Collected ${mergedJourneys.length} journeys across the last ${collectedDays} days.`);
     await chrome.storage.local.set({
       batchCollection: {
         ...batchCollection,
@@ -722,10 +763,11 @@ async function processBatchStateAfterLoad() {
 
   setTimeout(() => submitButton.click(), 300);
 
-  updateStatusPanel('Collecting last 28 days', `Processed ${batchCollection.processed?.length || 0} range(s), ${remainingQueue.length} remaining.`);
+  const collectedDays = Number(batchCollection.historyDays) || CLAIM_WINDOW_DAYS;
+  updateStatusPanel(`Collecting last ${collectedDays} days`, `Processed ${batchCollection.processed?.length || 0} range(s), ${remainingQueue.length} remaining.`);
 }
 
-async function startCollectLast28Days() {
+async function startCollectJourneys(historyDays = CLAIM_WINDOW_DAYS) {
   if (isMyOysterCardsPage()) {
     const journeyHistoryLink = document.querySelector('a[href*="journeyHistoryThrottle.do"]');
     if (!journeyHistoryLink) {
@@ -751,9 +793,9 @@ async function startCollectLast28Days() {
     return { ok: false, error: 'Date range controls not found on page.' };
   }
 
-  const queue = getDateRangeOptionsForLast28Days();
+  const queue = getDateRangeOptionsForWindow(historyDays);
   if (!queue.length) {
-    return { ok: false, error: 'No date ranges found for the last 28 days.' };
+    return { ok: false, error: `No date ranges found for the last ${historyDays} days.` };
   }
 
   const firstValue = queue.shift();
@@ -764,6 +806,7 @@ async function startCollectLast28Days() {
       startedAt: new Date().toISOString(),
       finishedAt: null,
       queue,
+      historyDays,
       processed: [firstValue],
       journeys: []
     }
@@ -772,10 +815,10 @@ async function startCollectLast28Days() {
   select.value = firstValue;
   select.dispatchEvent(new Event('change', { bubbles: true }));
 
-  updateStatusPanel('Collecting last 28 days', `Queued ${queue.length + 1} date range(s). Auto-submitting now.`);
+  updateStatusPanel(`Collecting last ${historyDays} days`, `Queued ${queue.length + 1} date range(s). Auto-submitting now.`);
   setTimeout(() => submitButton.click(), 300);
 
-  return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: false };
+  return { ok: true, queuedRanges: queue.length + 1, requiresManualClick: false, historyDays };
 }
 
 async function startCollectFromPendingNavigation() {
@@ -789,7 +832,7 @@ async function startCollectFromPendingNavigation() {
 
   await chrome.storage.local.remove(PENDING_COLLECT_STORAGE_KEY);
   updateStatusPanel('Journey history opened', 'Resuming automatic 28-day collection.');
-  await startCollectLast28Days();
+  await startCollectJourneys();
 }
 
 function injectTfLHelperPanel() {
@@ -806,7 +849,14 @@ function injectTfLHelperPanel() {
   }
 
   if (window.location.pathname.toLowerCase().includes('/oyster/sdr')) {
-    updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
+    chrome.storage.local.get('settings').then(({ settings }) => {
+      const tierService = getTierCapabilities(settings || {});
+      if (tierService.canAutoFill) {
+        updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
+      } else {
+        updateStatusPanel('Service delay refunds page detected', 'Upgrade to enable automatic form filling.');
+      }
+    });
     return;
   }
 
@@ -816,14 +866,26 @@ function injectTfLHelperPanel() {
 async function analyseJourneyTable() {
   const parsedJourneys = parseJourneyRows();
   const eligibleJourneys = getEligibleJourneys(parsedJourneys);
+  const { settings } = await chrome.storage.local.get('settings');
+  const tierService = getTierCapabilities(settings || {});
+  const visibleEligible = tierService.canAccessFullHistory
+    ? eligibleJourneys
+    : eligibleJourneys.filter((journey) => isWithinHistoryDays(journey.journeyDate, 7));
 
   await chrome.storage.local.set({
     lastAnalysedAt: new Date().toISOString(),
     lastParsedJourneys: parsedJourneys,
-    lastEligibleJourneys: eligibleJourneys
+    lastEligibleJourneys: visibleEligible
   });
 
-  return { parsedJourneys, eligibleJourneys };
+  const total = estimateSummaryTotal(visibleEligible).toFixed(2);
+  if (tierService.isPaid) {
+    updateStatusPanel('Eligible journeys ready', `Eligible claims: ${visibleEligible.length} · Est. refund: £${total} · Submission progress state: Ready`);
+  } else {
+    updateStatusPanel('Eligible journeys ready', `Eligible journeys: ${visibleEligible.length}. Upgrade to enable automatic form filling.`);
+  }
+
+  return { parsedJourneys, eligibleJourneys: visibleEligible };
 }
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
@@ -838,8 +900,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     sendResponse({ ok: true, isJourneyHistory: isTfLJourneyHistoryPage() });
   }
 
-  if (message?.type === 'COLLECT_LAST_28_DAYS') {
-    startCollectLast28Days()
+  if (message?.type === 'COLLECT_JOURNEYS' || message?.type === 'COLLECT_LAST_28_DAYS') {
+    startCollectJourneys(Number(message?.historyDays) || CLAIM_WINDOW_DAYS)
       .then((result) => sendResponse(result))
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
@@ -868,7 +930,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 (async () => {
   const { settings } = await chrome.storage.local.get('settings');
-  const autoDetect = settings?.isPaidTier && settings?.autoDetectOnLoad;
+  const tierService = getTierCapabilities(settings || {});
+  const autoDetect = tierService.isPaid && settings?.autoDetectOnLoad;
 
   if (isTfLJourneyHistoryPage()) {
     await processBatchStateAfterLoad();

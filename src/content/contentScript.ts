@@ -33,13 +33,13 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
       const queue = new ClaimQueue(noopBackend, logger);
       const journeys = (message.journeys ?? []).filter((item: unknown): item is any => Boolean(item));
 
-      if (tierService.canAutoSubmit()) {
+      if (tierService.canAutoFill()) {
         queue.enqueueJourneys(journeys);
       }
 
       const automation = new TfLAutomation(document, logger);
       await automation.navigateToServiceDelayRefund();
-      sendResponse({ ok: true, queued: queue.size(), requiresManualClick: !tierService.canAutoSubmit() });
+      sendResponse({ ok: true, queued: queue.size(), requiresManualClick: !tierService.canAutoFill() });
     });
     return true;
   }

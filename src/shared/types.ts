@@ -45,7 +45,9 @@ export interface Settings {
 
 export interface CapabilitySet {
   canAutoSubmit: boolean;
+  canAutoFill: boolean;
   canAccess28Days: boolean;
+  canAccessFullHistory: boolean;
 }
 
 export interface Logger {

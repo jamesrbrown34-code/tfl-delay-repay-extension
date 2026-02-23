@@ -11,10 +11,23 @@
       <header class="header">
         <h1>TubeRefund</h1>
         <p class="subtitle">Collect, analyse, and submit eligible delay journeys in one flow.</p>
+        <p class="tier-mode" id="currentTierLabel">Testing Tier Mode: Free</p>
       </header>
 
       <section class="controls">
-        <button id="runFullFlowButton">Run Full Flow (Collect → Analyse → Auto-fill)</button>
+        <button id="runFullFlowButton">Run Full Flow (Collect → Analyse → Continue)</button>
+        <fieldset class="tier-toggle" id="tierToggleGroup">
+          <legend>Testing Tier Mode</legend>
+          <label>
+            <input type="radio" name="tierMode" value="free" checked />
+            Free
+          </label>
+          <label>
+            <input type="radio" name="tierMode" value="paid" />
+            Paid
+          </label>
+        </fieldset>
+
         <button id="killModeButton" class="danger">Kill Mode: Stop All Automation</button>
         <label class="toggle-row">
           <input id="testModeToggle" type="checkbox" />

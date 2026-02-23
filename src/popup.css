@@ -101,3 +101,27 @@ textarea {
   background: #fffbeb;
   font-size: 12px;
 }
+
+.tier-mode {
+  margin: 6px 0 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.tier-toggle {
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  margin: 0;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.tier-toggle legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
