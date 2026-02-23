@@ -12,6 +12,7 @@
   ],
   "host_permissions": [
     "https://oyster.tfl.gov.uk/*",
+    "https://contactless.tfl.gov.uk/*",
     "https://tfl.gov.uk/*"
   ],
   "action": {
@@ -26,6 +27,7 @@
     {
       "matches": [
         "https://oyster.tfl.gov.uk/*",
+        "https://contactless.tfl.gov.uk/*",
         "https://tfl.gov.uk/*"
       ],
       "js": [
