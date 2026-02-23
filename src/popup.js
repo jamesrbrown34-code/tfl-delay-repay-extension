@@ -11,6 +11,7 @@ const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
 const adBanner = document.getElementById('adBanner');
 const currentTierLabel = document.getElementById('currentTierLabel');
+const actualTierLabel = document.getElementById('actualTierLabel');
 const tierModeInputs = Array.from(document.querySelectorAll('input[name="tierMode"]'));
 const tokenInput = document.getElementById('tokenInput');
 const tokenSubmitButton = document.getElementById('tokenSubmitButton');
@@ -195,7 +196,10 @@ async function refreshSettings() {
   const effectiveTier = hasPaidToken ? 'paid' : settings.tier;
 
   currentTierService = new TierService(effectiveTier);
-  currentTierLabel.textContent = `Testing Tier Mode: ${currentTierService.isPaid() ? 'Paid' : 'Free'}${hasPaidToken ? ' (manual token)' : ''}`;
+  currentTierLabel.textContent = `Testing Tier Mode: ${settings.tier === 'paid' ? 'Paid' : 'Free'}${hasPaidToken ? ' (overridden by manual token)' : ''}`;
+  if (actualTierLabel) {
+    actualTierLabel.textContent = `Actual Tier: ${currentTierService.isPaid() ? 'Paid' : 'Free'}${hasPaidToken ? ' (valid token)' : ''}`;
+  }
 
   tierModeInputs.forEach((input) => {
     input.checked = input.value === settings.tier;

@@ -125,3 +125,7 @@ textarea {
   font-size: 12px;
   font-weight: 600;
 }
+
+.actual-tier {
+  color: #1d4ed8;
+}
