@@ -116,13 +116,13 @@ textarea {
   border-radius: 6px;
   font-weight: 600;
   color: #ffffff;
-  background: #b45309;
-  border: 1px solid #92400e;
+  background: #f59e0b;
+  border: 1px solid #d97706;
   box-shadow: 0 1px 0 rgba(17, 24, 39, 0.18);
 }
 
 .upgrade-links a:hover {
-  background: #92400e;
+  background: #d97706;
 }
 
 .upgrade-links a:focus-visible {
