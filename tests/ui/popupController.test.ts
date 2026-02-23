@@ -9,6 +9,13 @@ function createDoc(): Document {
   return document;
 }
 
+
+function isoDateDaysAgo(days: number): string {
+  const now = new Date();
+  now.setDate(now.getDate() - days);
+  return now.toISOString().slice(0, 10);
+}
+
 function createSettings(tier: 'free' | 'paid'): Settings {
   return {
     tier,
@@ -21,8 +28,8 @@ function createSettings(tier: 'free' | 'paid'): Settings {
 describe('PopupController', () => {
   it('filters ineligible journeys during analysis', () => {
     const parseSpy = vi.spyOn(TfLScraper.prototype, 'parseJourneyRows').mockReturnValue([
-      buildJourney({ delayMinutes: 20 }),
-      buildJourney({ delayMinutes: 10, from: 'X', to: 'Y' })
+      buildJourney({ delayMinutes: 20, journeyDate: isoDateDaysAgo(1) }),
+      buildJourney({ delayMinutes: 10, from: 'X', to: 'Y', journeyDate: isoDateDaysAgo(1) })
     ]);
 
     const controller = new PopupController({
