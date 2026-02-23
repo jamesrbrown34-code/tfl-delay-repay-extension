@@ -329,8 +329,10 @@ async function refreshSettings() {
   testModeRealJourneysEnabled = Boolean(settings.testModeRealJourneys);
   testModeRealJourneysToggle.checked = testModeRealJourneysEnabled;
 
-  autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
-  autoDetectToggle.disabled = !currentTierService.isPaid();
+  if (autoDetectToggle) {
+    autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
+    autoDetectToggle.disabled = !currentTierService.isPaid();
+  }
 
   adBanner.style.display = currentTierService.isPaid() ? 'none' : 'block';
 }
@@ -475,12 +477,14 @@ testModeRealJourneysToggle.addEventListener('change', async () => {
   });
 });
 
-autoDetectToggle.addEventListener('change', async () => {
-  await chrome.runtime.sendMessage({
-    type: 'UPDATE_SETTINGS',
-    payload: { autoDetectOnLoad: autoDetectToggle.checked }
+if (autoDetectToggle) {
+  autoDetectToggle.addEventListener('change', async () => {
+    await chrome.runtime.sendMessage({
+      type: 'UPDATE_SETTINGS',
+      payload: { autoDetectOnLoad: autoDetectToggle.checked }
+    });
   });
-});
+}
 
 tierModeInputs.forEach((input) => {
   input.addEventListener('change', async () => {
