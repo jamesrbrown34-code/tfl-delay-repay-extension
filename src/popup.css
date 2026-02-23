@@ -129,3 +129,10 @@ textarea {
 .actual-tier {
   color: #1d4ed8;
 }
+
+
+.manual-upload-meta {
+  font-size: 12px;
+  color: #374151;
+  margin-bottom: 6px;
+}

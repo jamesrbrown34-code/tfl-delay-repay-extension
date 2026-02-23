@@ -9,6 +9,8 @@ const autoDetectToggle = document.getElementById('autoDetectToggle');
 const testModeRealJourneysToggle = document.getElementById('testModeRealJourneysToggle');
 const summaryBox = document.getElementById('summaryBox');
 const journeysList = document.getElementById('journeysList');
+const eligibleJourneysForManualUploadList = document.getElementById('eligibleJourneysForManualUploadList');
+const eligibleJourneysForManualUploadMeta = document.getElementById('eligibleJourneysForManualUploadMeta');
 const adBanner = document.getElementById('adBanner');
 const currentTierLabel = document.getElementById('currentTierLabel');
 const actualTierLabel = document.getElementById('actualTierLabel');
@@ -57,6 +59,48 @@ async function persistEligibleJourneysForManualUpload(journeys) {
       journeys
     }
   });
+
+  await refreshEligibleJourneysForManualUpload();
+}
+
+
+async function clearEligibleJourneysForManualUpload() {
+  await chrome.storage.local.remove(ELIGIBLE_JOURNEYS_STORAGE_KEY);
+}
+
+function renderStoredEligibleJourneys(payload) {
+  if (!eligibleJourneysForManualUploadList || !eligibleJourneysForManualUploadMeta) return;
+
+  const journeys = Array.isArray(payload?.journeys) ? payload.journeys : [];
+  eligibleJourneysForManualUploadList.innerHTML = '';
+
+  if (!journeys.length) {
+    eligibleJourneysForManualUploadMeta.textContent = 'No locally stored journeys.';
+    eligibleJourneysForManualUploadList.innerHTML = '<p>No saved manual-upload journeys.</p>';
+    return;
+  }
+
+  eligibleJourneysForManualUploadMeta.textContent = payload.savedAt
+    ? `Saved at: ${new Date(payload.savedAt).toLocaleString()}`
+    : 'Saved journeys (timestamp unavailable).';
+
+  const cards = journeys.map((journey) => {
+    const card = document.createElement('article');
+    card.className = 'journey-card';
+    card.innerHTML = `
+      <strong>${journey.journeyDate}: ${journey.from} → ${journey.to}</strong><br>
+      Delay: ${journey.delayMinutes} min · Ticket: ${journey.ticketType}<br>
+      Estimated refund: £${estimateRefund(journey).toFixed(2)}
+    `;
+    return card;
+  });
+
+  eligibleJourneysForManualUploadList.append(...cards);
+}
+
+async function refreshEligibleJourneysForManualUpload() {
+  const stored = await chrome.storage.local.get(ELIGIBLE_JOURNEYS_STORAGE_KEY);
+  renderStoredEligibleJourneys(stored[ELIGIBLE_JOURNEYS_STORAGE_KEY]);
 }
 
 function renderJourneys(journeys) {
@@ -281,6 +325,9 @@ runFullFlowButton.addEventListener('click', async () => {
   runFullFlowButton.disabled = true;
 
   try {
+    await clearEligibleJourneysForManualUpload();
+    await refreshEligibleJourneysForManualUpload();
+
     const historyDays = currentTierService.canAccessFullHistory() ? 28 : 7;
     summaryBox.innerHTML = `<p>Step 1/3: Starting collection for last ${historyDays} days…</p>`;
     const collectResult = await requestCollection(historyDays);
@@ -404,3 +451,4 @@ if (tokenSubmitButton) {
 
 refreshSettings();
 refreshWorkflowTracker();
+refreshEligibleJourneysForManualUpload();
