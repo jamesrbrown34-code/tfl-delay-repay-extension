@@ -401,7 +401,7 @@ runFullFlowButton.addEventListener('click', async () => {
     summaryBox.innerHTML = '<p>Step 1/3: Collecting journeys… leave the TfL tab open.</p>';
     const collected = await waitForBatchCompletion();
     if (!collected.ok && !testModeEnabled) {
-      summaryBox.innerHTML = '<p>Collection is still running. Keep the TfL tab open, then click Run Full Flow again.</p>';
+      summaryBox.innerHTML = '<p>Collection is still running. Keep the TfL tab open, then click Run Analysis & Collect Refunds again.</p>';
       return;
     }
 
