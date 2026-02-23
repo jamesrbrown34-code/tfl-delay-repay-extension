@@ -13,5 +13,6 @@ export const CONCESSION_KEYWORDS = [
 export const STORAGE_KEYS = {
   settings: 'settings',
   workflowState: 'sdrAutofillState',
-  claimQueue: 'claimQueue'
+  claimQueue: 'claimQueue',
+  eligibleJourneysForManualUpload: 'eligibleJourneysForManualUpload'
 } as const;

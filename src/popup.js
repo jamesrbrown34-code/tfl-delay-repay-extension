@@ -16,6 +16,7 @@ const tierModeInputs = Array.from(document.querySelectorAll('input[name="tierMod
 const tokenInput = document.getElementById('tokenInput');
 const tokenSubmitButton = document.getElementById('tokenSubmitButton');
 const tokenMessage = document.getElementById('tokenMessage');
+const ELIGIBLE_JOURNEYS_STORAGE_KEY = 'eligibleJourneysForManualUpload';
 
 let currentEligible = [];
 let testModeEnabled = false;
@@ -44,6 +45,18 @@ function isWithinDays(journeyDate, historyDays, now = new Date()) {
 function applyTierFilter(journeys, tierService) {
   if (tierService.canAccessFullHistory()) return journeys;
   return journeys.filter((journey) => isWithinDays(journey.journeyDate, 7));
+}
+
+
+async function persistEligibleJourneysForManualUpload(journeys) {
+  if (!Array.isArray(journeys)) return;
+
+  await chrome.storage.local.set({
+    [ELIGIBLE_JOURNEYS_STORAGE_KEY]: {
+      savedAt: new Date().toISOString(),
+      journeys
+    }
+  });
 }
 
 function renderJourneys(journeys) {
@@ -286,6 +299,9 @@ runFullFlowButton.addEventListener('click', async () => {
     summaryBox.innerHTML = '<p>Step 2/3: Analysing eligible journeys…</p>';
     const { eligibleJourneys, usedMockData, usedBatchData, usedRealJourneyTestMode } = await analyseFromPage(currentTierService);
     currentEligible = eligibleJourneys;
+    if (!currentTierService.isPaid()) {
+      await persistEligibleJourneysForManualUpload(currentEligible);
+    }
     renderJourneys(currentEligible);
     renderSummary(currentEligible, currentTierService);
 
@@ -304,6 +320,10 @@ runFullFlowButton.addEventListener('click', async () => {
     if (!currentEligible.length) {
       summaryBox.innerHTML += '<p>No eligible journeys to submit.</p>';
       return;
+    }
+
+    if (!currentTierService.isPaid()) {
+      summaryBox.innerHTML += '<p>Eligible journeys were saved locally so you can manually upload them later.</p>';
     }
 
     summaryBox.innerHTML += '<p>Step 3/3: Opening service delay refund workflow…</p>';
