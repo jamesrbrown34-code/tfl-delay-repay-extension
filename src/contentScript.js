@@ -1,103 +1,40 @@
-const CLAIM_WINDOW_DAYS = 28;
+import {
+  CLAIM_WINDOW_DAYS,
+  formatJourneyDate,
+  parseDateLabelToDdMmYyyy
+} from './core/dateUtils.js';
+import {
+  calculateDelayWithBuffer,
+  getEligibleJourneys
+} from './core/eligibility.js';
+import {
+  normalizeStationName,
+  parseStationPairFromAction
+} from './core/stationUtils.js';
+import {
+  extractEndTimeFromJourney,
+  extractTimeFromJourneyDate,
+  parseTimeRangeEnd,
+  parseTimeRangeStart
+} from './core/timeUtils.js';
+import { SELECTORS } from './content/selectors.js';
+import { ServiceDelayWorkflow } from './content/workflow/serviceDelayWorkflow.js';
+
 const MIN_DELAY_MINUTES = 15;
-const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
 const PENDING_COLLECT_STORAGE_KEY = 'pendingCollectFromMyCards';
-const CONCESSION_KEYWORDS = [
-  'freedom pass',
-  '60+ oyster',
-  'veteran',
-  'child',
-  'zip',
-  'concession',
-  'free travel'
-];
 
 function extractText(node, fallback = '') {
   return (node?.textContent || fallback).trim();
 }
 
-function isConcessionFare(ticketType = '') {
-  const normalized = ticketType.toLowerCase();
-  return CONCESSION_KEYWORDS.some((keyword) => normalized.includes(keyword));
-}
-
-function isWithinClaimWindow(journeyDate, now = new Date()) {
-  const parsedDate = new Date(journeyDate);
-  if (Number.isNaN(parsedDate.getTime())) return false;
-
-  const windowStart = new Date(now);
-  windowStart.setHours(0, 0, 0, 0);
-  windowStart.setDate(windowStart.getDate() - CLAIM_WINDOW_DAYS);
-
-  parsedDate.setHours(0, 0, 0, 0);
-  return parsedDate >= windowStart;
-}
-
-function parseStationPairFromAction(actionText = '') {
-  const match = actionText.match(/(.+?)\s+to\s+(.+)/i);
-  if (!match) return null;
-
-  const from = match[1].trim();
-  const to = match[2].trim();
-  if (!from || !to) return null;
-
-  return { from, to };
-}
-
-function parseDateLabelToDdMmYyyy(text = '') {
-  const normalized = String(text).replace(/\s+/g, ' ').trim();
-  const match = normalized.match(/(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})/);
-  if (!match) return null;
-
-  const monthMap = {
-    january: 1,
-    february: 2,
-    march: 3,
-    april: 4,
-    may: 5,
-    june: 6,
-    july: 7,
-    august: 8,
-    september: 9,
-    october: 10,
-    november: 11,
-    december: 12
-  };
-
-  const day = Number(match[1]);
-  const month = monthMap[match[2].toLowerCase()];
-  const year = Number(match[3]);
-  if (!day || !month || !year) return null;
-
-  return `${String(day).padStart(2, '0')}/${String(month).padStart(2, '0')}/${year}`;
-}
-
-function parseTimeRangeStart(timeCell = '') {
-  const match = String(timeCell).match(/(\d{1,2})[:.](\d{2})\s*[-–]/);
-  if (!match) return null;
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
-}
-
-function parseTimeRangeEnd(timeCell = '') {
-  const match = String(timeCell).match(/[-–]\s*(\d{1,2})[:.](\d{2})/);
-  if (!match) return null;
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
-}
-
 function parseJourneyRows() {
-  const rows = Array.from(document.querySelectorAll('table tbody tr'));
+  const rows = Array.from(document.querySelectorAll(SELECTORS.journeyHistory.tableRows));
   let currentDateLabel = null;
 
   return rows
     .map((row) => {
-      const cells = row.querySelectorAll('td');
+      const cells = row.querySelectorAll(SELECTORS.journeyHistory.tableCells);
       if (!cells.length) return null;
 
       if (cells.length >= 6) {
@@ -158,13 +95,6 @@ function parseJourneyRows() {
     .filter(Boolean);
 }
 
-function getEligibleJourneys(journeys) {
-  return journeys
-    .filter((journey) => journey.delayEligible)
-    .filter((journey) => isWithinClaimWindow(journey.journeyDate))
-    .filter((journey) => !isConcessionFare(journey.ticketType));
-}
-
 function isTfLJourneyHistoryPage() {
   const url = window.location.href.toLowerCase();
   const host = window.location.hostname.toLowerCase();
@@ -174,7 +104,7 @@ function isTfLJourneyHistoryPage() {
 }
 
 function isMyOysterCardsPage() {
-  const heading = document.querySelector('h1');
+  const heading = document.querySelector(SELECTORS.journeyHistory.pageHeading);
   const headingText = (heading?.textContent || '').trim().toLowerCase();
   const path = window.location.pathname.toLowerCase();
   return headingText === 'my oyster cards' || path.includes('/myoystercards');
@@ -200,7 +130,7 @@ function getReadableWorkflowStage(stage = '') {
 function ensureStatusPanel() {
   if (!isExpectedTfLPage()) return null;
 
-  let panel = document.querySelector('#tfl-delay-helper-panel');
+  let panel = document.querySelector(SELECTORS.navigation.helperPanel);
   if (panel) return panel;
 
   panel = document.createElement('div');
@@ -225,7 +155,7 @@ function updateStatusPanel(status, detail = '') {
   const panel = ensureStatusPanel();
   if (!panel) return;
 
-  const statusNode = panel.querySelector('#tfl-delay-helper-panel-status');
+  const statusNode = panel.querySelector(SELECTORS.navigation.helperPanelStatus);
   if (!statusNode) return;
 
   statusNode.innerHTML = detail ? `${status}<br><span style="opacity:0.9">${detail}</span>` : status;
@@ -247,7 +177,7 @@ function parseOptionRange(optionValue) {
 }
 
 function getDateRangeOptionsForLast28Days() {
-  const select = document.querySelector('#date-range');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
   if (!select) return [];
 
   const cutoff = new Date();
@@ -266,85 +196,6 @@ function getDateRangeOptionsForLast28Days() {
 
 function getJourneyKey(journey) {
   return [journey.journeyDate, journey.from, journey.to, journey.expectedMinutes, journey.actualMinutes, journey.ticketType].join('|');
-}
-
-function parseDdMmYyyyToDate(rawDate) {
-  const normalized = String(rawDate || '').trim();
-  const ddMmYyyyMatch = normalized.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (!ddMmYyyyMatch) return null;
-
-  const day = Number(ddMmYyyyMatch[1]);
-  const month = Number(ddMmYyyyMatch[2]);
-  const year = Number(ddMmYyyyMatch[3]);
-
-  if (!day || !month || !year) return null;
-
-  const parsed = new Date(year, month - 1, day);
-  if (Number.isNaN(parsed.getTime())) return null;
-  if (parsed.getDate() !== day || parsed.getMonth() !== month - 1 || parsed.getFullYear() !== year) return null;
-
-  return parsed;
-}
-
-function formatDateAsDdMmYyyy(date) {
-  const day = String(date.getDate()).padStart(2, '0');
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const year = String(date.getFullYear());
-  return `${day}/${month}/${year}`;
-}
-
-function extractTimeFromJourneyDate(journey = {}) {
-  if (journey?.startTime && Number.isFinite(journey.startTime.hours) && Number.isFinite(journey.startTime.mins)) {
-    return {
-      hours: journey.startTime.hours,
-      mins: journey.startTime.mins
-    };
-  }
-
-  const match = String(journey?.journeyDate || '').match(/(\d{1,2}):(\d{2})/);
-  if (!match) return { hours: 12, mins: 0 };
-  return {
-    hours: Number(match[1]),
-    mins: Number(match[2])
-  };
-}
-
-function extractEndTimeFromJourney(journey = {}) {
-  if (journey?.endTime && Number.isFinite(journey.endTime.hours) && Number.isFinite(journey.endTime.mins)) {
-    return {
-      hours: journey.endTime.hours,
-      mins: journey.endTime.mins
-    };
-  }
-
-  const start = extractTimeFromJourneyDate(journey);
-  const expected = Number(journey?.actualMinutes || journey?.expectedMinutes || 0);
-  const startTotal = start.hours * 60 + start.mins;
-  const endTotal = Math.max(startTotal, startTotal + expected);
-
-  return {
-    hours: Math.floor((endTotal % (24 * 60)) / 60),
-    mins: endTotal % 60
-  };
-}
-
-function formatJourneyDate(rawDate) {
-  const parsedDdMmYyyy = parseDdMmYyyyToDate(rawDate);
-  if (parsedDdMmYyyy) return formatDateAsDdMmYyyy(parsedDdMmYyyy);
-
-  const parsedLabel = parseDateLabelToDdMmYyyy(rawDate);
-  if (parsedLabel) return parsedLabel;
-
-  const parsedGeneric = new Date(String(rawDate || '').replace(/(\d{1,2}:\d{2}).*$/, '').trim());
-  if (!Number.isNaN(parsedGeneric.getTime())) {
-    return formatDateAsDdMmYyyy(parsedGeneric);
-  }
-
-  return formatDateAsDdMmYyyy(new Date());
-}
-
-function normalizeStationName(name = '') {
-  return name.toLowerCase().replace(/\[[^\]]+\]/g, '').replace(/[^a-z0-9]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function selectOptionByText(select, label) {
@@ -378,196 +229,8 @@ function setSelectValue(select, value) {
   return true;
 }
 
-function ensureOysterCardTypeSelected() {
-  const oysterCardRadio = document.querySelector('#oysterCardType');
-  if (!oysterCardRadio) return false;
-
-  const oysterCardLabel = document.querySelector('label[for="oysterCardType"]');
-  if (oysterCardLabel) oysterCardLabel.click();
-  oysterCardRadio.click();
-  oysterCardRadio.checked = true;
-  oysterCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
-  oysterCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-}
-
-function getFirstOysterCardOption(select) {
-  return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
-}
-
-function calculateDelayWithBuffer(delayMinutes) {
-  const totalMinutes = Math.max(0, Number(delayMinutes) || 0) + CLAIM_AUTOFILL_BUFFER_MINUTES;
-  const hours = Math.min(3, Math.floor(totalMinutes / 60));
-  const mins = totalMinutes % 60;
-  return { hours, mins };
-}
-
-function findNextButtonByText(labelText) {
-  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
-    const text = (element.textContent || element.value || '').toLowerCase().trim();
-    return text === labelText.toLowerCase();
-  });
-}
-
-function logTestMode(event, details = {}) {
-  if (!details?.settings?.testMode && !details?.settings?.testModeRealJourneys) return;
-  const timestamp = new Date().toISOString();
-  console.log(`[SDR test mode] ${event}`, {
-    timestamp,
-    ...details
-  });
-}
-
-function findFinalSubmitButton() {
-  const byValue = document.querySelector('button[type="submit"][value="Submit"],input[type="submit"][value="Submit"]');
-  if (byValue) return byValue;
-
-  return Array.from(document.querySelectorAll('button[type="submit"],input[type="submit"]')).find((element) => {
-    const text = (element.textContent || element.value || '').toLowerCase().trim();
-    return text === 'submit';
-  }) || null;
-}
-
-async function fillCardSelectionStep(state, settings) {
-  ensureOysterCardTypeSelected();
-
-  const cardSelect = document.querySelector('#oysterCardId');
-  if (!cardSelect) return false;
-
-  const preferredCardId = settings?.serviceDelayCardId;
-  if (preferredCardId) {
-    setSelectValue(cardSelect, preferredCardId);
-  } else if (!cardSelect.value) {
-    const firstCard = getFirstOysterCardOption(cardSelect);
-    if (firstCard) {
-      cardSelect.value = firstCard.value;
-      cardSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
-
-  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
-  if (!nextPageButton) return false;
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'journey-details'
-    }
-  });
-
-  setTimeout(() => nextPageButton.click(), 250);
-  return true;
-}
-
-function fillJourneyDetailsForm(journey, settings) {
-  const lineSelect = document.querySelector('#tflNetworkLine');
-  const startSelect = document.querySelector('#startStationNlc');
-  const endSelect = document.querySelector('#endStationNlc');
-  const dateInput = document.querySelector('#journeyStartDate');
-  const hourSelect = document.querySelector('#journeyStartDate_hh');
-  const minuteSelect = document.querySelector('#journeyStartDate_mins');
-  const endDateInput = document.querySelector('#journeyEndDate');
-  const endHourSelect = document.querySelector('#journeyEndDate_hh');
-  const endMinuteSelect = document.querySelector('#journeyEndDate_mins');
-  const delayHourSelect = document.querySelector('#lengthOfDelay_hh');
-  const delayMinuteSelect = document.querySelector('#lengthOfDelay_mins');
-
-  if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !endDateInput || !endHourSelect || !endMinuteSelect || !delayHourSelect || !delayMinuteSelect) {
-    return { ok: false, error: 'Service delay form fields were not found.' };
-  }
-
-  const selectedLine = settings?.serviceDelayNetworkLine || 'UNDERGROUND';
-  setSelectValue(lineSelect, selectedLine);
-
-  const startMatched = selectOptionByText(startSelect, journey.from);
-  const endMatched = selectOptionByText(endSelect, journey.to);
-
-  if (!startMatched || !endMatched) {
-    return { ok: false, error: `Could not map station(s) for journey ${journey.from} → ${journey.to}.` };
-  }
-
-  dateInput.value = formatJourneyDate(journey.journeyDate);
-  dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-  dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-  const startTime = extractTimeFromJourneyDate(journey);
-  const startHour = startTime.hours;
-  const startMinute = startTime.mins;
-  setSelectValue(hourSelect, startHour);
-  setSelectValue(minuteSelect, startMinute);
-
-  endDateInput.value = formatJourneyDate(journey.journeyDate);
-  endDateInput.dispatchEvent(new Event('input', { bubbles: true }));
-  endDateInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-  const endTime = extractEndTimeFromJourney(journey);
-  setSelectValue(endHourSelect, endTime.hours);
-  setSelectValue(endMinuteSelect, endTime.mins);
-
-  const bufferedDelay = calculateDelayWithBuffer(journey.delayMinutes);
-  setSelectValue(delayHourSelect, String(bufferedDelay.hours).padStart(2, '0'));
-  setSelectValue(delayMinuteSelect, bufferedDelay.mins);
-
-  return { ok: true };
-}
-
-async function fillJourneyDetailsStep(state) {
-  const journey = state?.queue?.[0];
-  if (!journey) {
-    await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
-    return { ok: false, error: 'No journeys left to submit.' };
-  }
-
-  const { settings } = await chrome.storage.local.get('settings');
-  const fillResult = fillJourneyDetailsForm(journey, settings);
-  if (!fillResult.ok) return fillResult;
-
-  const nextPageButton = document.querySelector('#submitBtn') || findNextButtonByText('next page');
-  if (!nextPageButton) return { ok: false, error: 'Next Page button was not found on journey details form.' };
-
-  const remaining = state.queue.slice(1);
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      queue: remaining,
-      completed: [...(state.completed || []), journey],
-      stage: remaining.length ? 'card-selection' : 'completed',
-      lastSubmittedAt: new Date().toISOString()
-    }
-  });
-
-  setTimeout(() => nextPageButton.click(), 250);
-  return {
-    ok: true,
-    submitted: journey,
-    remaining: remaining.length,
-    requiresManualClick: false
-  };
-}
-
-async function fillRefundTypeStep(state) {
-  const refundToCardRadio = document.querySelector('#ahlRefundType');
-  if (!refundToCardRadio) {
-    return { ok: false, error: 'Refund-to-card option was not found on page.' };
-  }
-
-  refundToCardRadio.checked = true;
-  refundToCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
-  refundToCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'refund-type-selected',
-      refundTypeSelectedAt: new Date().toISOString()
-    }
-  });
-
-  return { ok: true, selected: 'FUL' };
-}
-
 function showFinalSubmitManualNotice() {
-  const existing = document.querySelector('#sdr-final-submit-toast');
+  const existing = document.querySelector(SELECTORS.navigation.finalSubmitToast);
   if (existing) existing.remove();
 
   const toast = document.createElement('div');
@@ -589,63 +252,12 @@ function showFinalSubmitManualNotice() {
   }, 5000);
 }
 
-async function fillFinalSubmitStep(state) {
-  const finalSubmitButton = findFinalSubmitButton();
-  if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
-
-  updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-  showFinalSubmitManualNotice();
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'awaiting-final-submit',
-      finalSubmitPromptedAt: new Date().toISOString()
-    }
-  });
-
-  return { ok: true, requiresManualClick: true, prompted: true };
-}
-
-async function runServiceDelayAutofill() {
-  const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
-  if (!sdrAutofillState?.active) return;
-
-  const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
-  const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
-  const inRefundTypeStep = Boolean(document.querySelector('#ahlRefundType'));
-  const inFinalSubmitStep = Boolean(findFinalSubmitButton());
-
-  if (inCardSelection) {
-    updateStatusPanel(getReadableWorkflowStage('card-selection'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
-    await fillCardSelectionStep(sdrAutofillState, settings);
-    return;
-  }
-
-  if (inJourneyDetails) {
-    updateStatusPanel(getReadableWorkflowStage('journey-details'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
-    await fillJourneyDetailsStep(sdrAutofillState);
-    return;
-  }
-
-  if (inRefundTypeStep) {
-    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-    await fillRefundTypeStep(sdrAutofillState);
-    return;
-  }
-
-  if (inFinalSubmitStep) {
-    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-    await fillFinalSubmitStep(sdrAutofillState);
-  }
-}
-
 async function startServiceDelayWorkflow(journeys) {
   if (!Array.isArray(journeys) || !journeys.length) {
     return { ok: false, error: 'No journeys supplied for service delay workflow.' };
   }
 
-  const serviceDelayLink = document.querySelector('#navSDR');
+  const serviceDelayLink = document.querySelector(SELECTORS.navigation.serviceDelayLink);
   if (!serviceDelayLink) {
     return { ok: false, error: 'Service delay refunds navigation link not found.' };
   }
@@ -712,8 +324,8 @@ async function processBatchStateAfterLoad() {
     }
   });
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
 
   if (!select || !submitButton) return;
 
@@ -727,7 +339,7 @@ async function processBatchStateAfterLoad() {
 
 async function startCollectLast28Days() {
   if (isMyOysterCardsPage()) {
-    const journeyHistoryLink = document.querySelector('a[href*="journeyHistoryThrottle.do"]');
+    const journeyHistoryLink = document.querySelector(SELECTORS.journeyHistory.viewJourneyHistoryLink);
     if (!journeyHistoryLink) {
       return { ok: false, error: 'View journey history link not found on My Oyster cards page.' };
     }
@@ -744,8 +356,8 @@ async function startCollectLast28Days() {
     return { ok: true, redirected: true, requiresManualClick: false };
   }
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
 
   if (!select || !submitButton) {
     return { ok: false, error: 'Date range controls not found on page.' };
@@ -783,8 +395,8 @@ async function startCollectFromPendingNavigation() {
   if (!pendingCollectFromMyCards?.active) return;
   if (!isTfLJourneyHistoryPage()) return;
 
-  const select = document.querySelector('#date-range');
-  const submitButton = document.querySelector('#date-range-button');
+  const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
+  const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
   if (!select || !submitButton) return;
 
   await chrome.storage.local.remove(PENDING_COLLECT_STORAGE_KEY);
@@ -882,5 +494,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     await analyseJourneyTable();
   }
 
-  await runServiceDelayAutofill();
+  const serviceDelayWorkflow = new ServiceDelayWorkflow(
+    {
+      get: (keys) => chrome.storage.local.get(keys),
+      set: (items) => chrome.storage.local.set(items),
+      remove: (keys) => chrome.storage.local.remove(keys)
+    },
+    {
+      query: (selector) => document.querySelector(selector),
+      queryAll: (selector) => document.querySelectorAll(selector),
+      createEvent: (type) => new Event(type, { bubbles: true }),
+      setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+      selectOptionByText,
+      setSelectValue,
+      formatJourneyDate,
+      extractTimeFromJourneyDate,
+      extractEndTimeFromJourney,
+      calculateDelayWithBuffer,
+      getReadableWorkflowStage,
+      claimAutofillStorageKey: CLAIM_AUTOFILL_STORAGE_KEY
+    },
+    {
+      update: updateStatusPanel,
+      showFinalSubmitManualNotice
+    }
+  );
+
+  await serviceDelayWorkflow.handlePage();
 })();
