@@ -7,29 +7,75 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
-    <main class="app">
-      <header class="header">
-        <h1>TubeRefund</h1>
+    <main class="app" aria-label="TubeRefund popup">
+      <header class="header panel">
+        <div class="brand-row">
+          <h1>TubeRefund</h1>
+          <span class="badge" id="actualTierLabel" aria-live="polite">Actual Tier: Free</span>
+        </div>
         <p class="subtitle">Collect, analyse, and submit eligible delay journeys in one flow.</p>
-        <p class="tier-mode" id="currentTierLabel">Testing Tier Mode: Free</p>
-        <p class="tier-mode actual-tier" id="actualTierLabel">Actual Tier: Free</p>
       </header>
 
-      <aside id="adBanner" class="ad-banner">
-        <strong>Ad:</strong> Upgrade to premium for auto-detection, monthly summaries, and no ads.
+      <aside id="adBanner" class="ad-banner panel" aria-label="Upgrade options">
+        <p class="ad-title">Unlock Premium</p>
+        <p class="ad-copy">Unlock auto-filled submissions, monthly tracking, and exclusive features!</p>
         <div class="upgrade-links" aria-label="Stripe upgrade options">
-          <a class="upgrade-cta" href="https://buy.stripe.com/9B6dRa9WiaGk5mGegEejK02" target="_blank" rel="noopener noreferrer">
-            <span class="plan-title">⭐ Annual – £29.99/year</span>
-            <span class="plan-subtitle">£2.50 per month (Best Value)</span>
+          <a
+            class="upgrade-cta recommended"
+            href="https://buy.stripe.com/9B6dRa9WiaGk5mGegEejK02"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="recommended-label">Recommended</span>
+            <span class="plan-title">⭐ Annual · £29.99/year</span>
+            <span class="plan-subtitle">Only £2.50/month · Best Value</span>
           </a>
-          <a class="upgrade-cta" href="https://buy.stripe.com/6oUcN67Oa6q46qK2xWejK03" target="_blank" rel="noopener noreferrer">
-            <span class="plan-title">Monthly – £3.49/month</span>
+          <a
+            class="upgrade-cta secondary"
+            href="https://buy.stripe.com/6oUcN67Oa6q46qK2xWejK03"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <span class="plan-title">Monthly · £3.49/month</span>
+            <span class="plan-subtitle">Flexible monthly billing</span>
           </a>
         </div>
       </aside>
 
-      <section class="controls">
-        <button id="runFullFlowButton">Run Full Flow (Collect → Analyse → Continue)</button>
+      <section class="controls panel" aria-label="Automation controls">
+        <button id="runFullFlowButton" class="button button-primary">Run Analysis & Collect Refunds</button>
+
+        <button id="killModeButton" class="button button-danger">Kill Mode: Stop All Automation</button>
+
+        <fieldset class="tier-toggle token-panel" id="manualTokenGroup">
+          <legend>Manual Paid Token</legend>
+          <label for="tokenInput">Paste token</label>
+          <input id="tokenInput" type="text" placeholder="Base64 token" />
+          <button id="tokenSubmitButton" type="button" class="button button-secondary">Activate Paid Tier</button>
+          <p id="tokenMessage" aria-live="polite"></p>
+        </fieldset>
+      </section>
+
+      <section class="summary panel" id="summaryBox">
+        <p>No analysis run yet.</p>
+      </section>
+
+      <section class="panel">
+        <h2>Eligible Journeys</h2>
+        <div id="journeysList" class="journeys-list"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Eligible Journeys For Manual Upload</h2>
+        <p class="subtitle">Stored locally for free-tier manual upload.</p>
+        <div id="eligibleJourneysForManualUploadMeta" class="manual-upload-meta"></div>
+        <div id="eligibleJourneysForManualUploadList" class="journeys-list"></div>
+      </section>
+
+      <section class="panel testing-panel" aria-label="Testing controls">
+        <h2>Testing Controls</h2>
+        <p class="subtitle" id="currentTierLabel">Testing Tier Mode: Free</p>
+
         <fieldset class="tier-toggle" id="tierToggleGroup">
           <legend>Testing Tier Mode</legend>
           <label>
@@ -42,47 +88,35 @@
           </label>
         </fieldset>
 
-        <button id="killModeButton" class="danger">Kill Mode: Stop All Automation</button>
         <label class="toggle-row">
           <input id="testModeToggle" type="checkbox" />
-          Test mode (force local mock data)
+          <span>Test mode (force local mock data)</span>
         </label>
         <label class="toggle-row">
           <input id="testModeRealJourneysToggle" type="checkbox" />
-          Test mode (real journeys, ignore min delay, never final submit)
-        </label>
-        <label class="toggle-row">
-          <input id="autoDetectToggle" type="checkbox" />
-          Paid: Auto-detect on page load
+          <span>Test mode (real journeys, ignore min delay, never final submit)</span>
         </label>
 
-        <fieldset class="tier-toggle" id="manualTokenGroup">
-          <legend>Manual Paid Token (MVP)</legend>
-          <label for="tokenInput">Paste token</label>
-          <input id="tokenInput" type="text" placeholder="Base64 token" />
-          <button id="tokenSubmitButton" type="button">Activate Paid Tier</button>
-          <div class="token-actions">
-            <button id="generateTestTokenButton" type="button" class="secondary token-mini" title="Generate Test Token" aria-label="Generate Test Token">Gen</button>
-            <button id="deleteTestTokenButton" type="button" class="danger token-mini" title="Delete Test Token" aria-label="Delete Test Token">Del</button>
-          </div>
-          <p id="tokenMessage" aria-live="polite"></p>
-        </fieldset>
-      </section>
-
-      <section class="summary" id="summaryBox">
-        <p>No analysis run yet.</p>
-      </section>
-
-      <section>
-        <h2>Eligible Journeys</h2>
-        <div id="journeysList" class="journeys-list"></div>
-      </section>
-
-      <section>
-        <h2>Eligible Journeys For Manual Upload</h2>
-        <p class="subtitle">Stored locally for free-tier manual upload.</p>
-        <div id="eligibleJourneysForManualUploadMeta" class="manual-upload-meta"></div>
-        <div id="eligibleJourneysForManualUploadList" class="journeys-list"></div>
+        <div class="token-actions">
+          <button
+            id="generateTestTokenButton"
+            type="button"
+            class="button button-secondary token-mini"
+            title="Generate Test Token"
+            aria-label="Generate Test Token"
+          >
+            Generate Test Token
+          </button>
+          <button
+            id="deleteTestTokenButton"
+            type="button"
+            class="button button-danger token-mini"
+            title="Delete Test Token"
+            aria-label="Delete Test Token"
+          >
+            Delete Test Token
+          </button>
+        </div>
       </section>
     </main>
 

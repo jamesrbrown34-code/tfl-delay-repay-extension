@@ -329,8 +329,10 @@ async function refreshSettings() {
   testModeRealJourneysEnabled = Boolean(settings.testModeRealJourneys);
   testModeRealJourneysToggle.checked = testModeRealJourneysEnabled;
 
-  autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
-  autoDetectToggle.disabled = !currentTierService.isPaid();
+  if (autoDetectToggle) {
+    autoDetectToggle.checked = Boolean(settings.autoDetectOnLoad);
+    autoDetectToggle.disabled = !currentTierService.isPaid();
+  }
 
   adBanner.style.display = currentTierService.isPaid() ? 'none' : 'block';
 }
@@ -399,7 +401,7 @@ runFullFlowButton.addEventListener('click', async () => {
     summaryBox.innerHTML = '<p>Step 1/3: Collecting journeys… leave the TfL tab open.</p>';
     const collected = await waitForBatchCompletion();
     if (!collected.ok && !testModeEnabled) {
-      summaryBox.innerHTML = '<p>Collection is still running. Keep the TfL tab open, then click Run Full Flow again.</p>';
+      summaryBox.innerHTML = '<p>Collection is still running. Keep the TfL tab open, then click Run Analysis & Collect Refunds again.</p>';
       return;
     }
 
@@ -475,12 +477,14 @@ testModeRealJourneysToggle.addEventListener('change', async () => {
   });
 });
 
-autoDetectToggle.addEventListener('change', async () => {
-  await chrome.runtime.sendMessage({
-    type: 'UPDATE_SETTINGS',
-    payload: { autoDetectOnLoad: autoDetectToggle.checked }
+if (autoDetectToggle) {
+  autoDetectToggle.addEventListener('change', async () => {
+    await chrome.runtime.sendMessage({
+      type: 'UPDATE_SETTINGS',
+      payload: { autoDetectOnLoad: autoDetectToggle.checked }
+    });
   });
-});
+}
 
 tierModeInputs.forEach((input) => {
   input.addEventListener('change', async () => {
