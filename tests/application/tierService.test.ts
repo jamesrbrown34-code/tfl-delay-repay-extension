@@ -38,6 +38,20 @@ describe('TierService capability gating', () => {
     expect(snapshots[4].canAutoSubmit).toBe(false);
   });
 
+
+
+  it('exercises explicit accessor methods for capability wrappers', () => {
+    const free = new TierService('free');
+    const paid = new TierService('paid');
+
+    expect(free.getCurrentTier()).toBe('free');
+    expect(paid.getCurrentTier()).toBe('paid');
+    expect(free.canAutoSubmit()).toBe(false);
+    expect(paid.canAutoSubmit()).toBe(false);
+    expect(free.canAccess28Days()).toBe(false);
+    expect(paid.canAccess28Days()).toBe(true);
+  });
+
   it('is mutation-resistant for inverted capability logic', () => {
     const free = new TierService('free');
     const paid = new TierService('paid');

@@ -62,6 +62,12 @@ describe('eligibility', () => {
     expect(filtered[0].delayMinutes).toBe(20);
   });
 
+
+
+  it('returns an empty list when filtering an empty journey set', () => {
+    expect(filterEligibleJourneys([], now)).toEqual([]);
+  });
+
   it('handles malformed delay values (NaN) as ineligible', () => {
     const malformed = buildJourney({ delayMinutes: Number.NaN as unknown as number, journeyDate: '2025-02-12' });
     const decision = evaluateEligibility(malformed, now);
