@@ -159,3 +159,11 @@ textarea {
 .token-actions button {
   width: 100%;
 }
+
+
+.token-mini {
+  font-size: 11px;
+  padding: 4px 8px;
+  min-height: 24px;
+  line-height: 1;
+}
