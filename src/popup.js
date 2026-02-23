@@ -12,11 +12,21 @@ const journeysList = document.getElementById('journeysList');
 const adBanner = document.getElementById('adBanner');
 const currentTierLabel = document.getElementById('currentTierLabel');
 const tierModeInputs = Array.from(document.querySelectorAll('input[name="tierMode"]'));
+const tokenInput = document.getElementById('tokenInput');
+const tokenSubmitButton = document.getElementById('tokenSubmitButton');
+const tokenMessage = document.getElementById('tokenMessage');
 
 let currentEligible = [];
 let testModeEnabled = false;
 let testModeRealJourneysEnabled = false;
 let currentTierService = new TierService('free');
+const manualTokenTierService = new TierService('free');
+
+function setTokenMessage(text, isError = false) {
+  if (!tokenMessage) return;
+  tokenMessage.textContent = text;
+  tokenMessage.style.color = isError ? '#b00020' : '#0b6e2e';
+}
 
 function isWithinDays(journeyDate, historyDays, now = new Date()) {
   const parsed = new Date(journeyDate);
@@ -180,11 +190,16 @@ async function refreshSettings() {
   const settingsResponse = await chrome.runtime.sendMessage({ type: 'GET_SETTINGS' });
   const settings = settingsResponse?.settings || { tier: 'free', autoDetectOnLoad: false, showAds: true, testMode: false, testModeRealJourneys: false };
 
-  currentTierService = TierService.fromSettings(settings);
-  currentTierLabel.textContent = `Testing Tier Mode: ${currentTierService.isPaid() ? 'Paid' : 'Free'}`;
+  await manualTokenTierService.initialize();
+  const hasPaidToken = manualTokenTierService.isPaid();
+  const effectiveTier = hasPaidToken ? 'paid' : settings.tier;
+
+  currentTierService = new TierService(effectiveTier);
+  currentTierLabel.textContent = `Testing Tier Mode: ${currentTierService.isPaid() ? 'Paid' : 'Free'}${hasPaidToken ? ' (manual token)' : ''}`;
 
   tierModeInputs.forEach((input) => {
-    input.checked = input.value === currentTierService.getCurrentTier();
+    input.checked = input.value === settings.tier;
+    input.disabled = hasPaidToken;
   });
 
   testModeEnabled = Boolean(settings.testMode);
@@ -346,6 +361,22 @@ tierModeInputs.forEach((input) => {
     await refreshSettings();
   });
 });
+
+if (tokenSubmitButton) {
+  tokenSubmitButton.addEventListener('click', async () => {
+    const token = tokenInput?.value?.trim() || '';
+    const result = await manualTokenTierService.saveToken(token);
+
+    if (!result.valid) {
+      setTokenMessage(`Invalid token: ${result.reason}`, true);
+      return;
+    }
+
+    setTokenMessage(`Token accepted. Paid access active until ${result.exp}.`);
+    if (tokenInput) tokenInput.value = '';
+    await refreshSettings();
+  });
+}
 
 refreshSettings();
 refreshWorkflowTracker();
