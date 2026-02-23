@@ -1,5 +1,3 @@
-import { TierService } from './utils/tierService.js';
-
 const CLAIM_WINDOW_DAYS = 28;
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_BUFFER_MINUTES = 5;
@@ -14,6 +12,21 @@ const CONCESSION_KEYWORDS = [
   'concession',
   'free travel'
 ];
+
+function normalizeTier(rawTier) {
+  return rawTier === 'paid' ? 'paid' : 'free';
+}
+
+function getTierCapabilities(settings = {}) {
+  const tier = normalizeTier(settings?.tier);
+  const isPaid = tier === 'paid';
+  return {
+    tier,
+    isPaid,
+    canAutoFill: isPaid,
+    canAccessFullHistory: isPaid
+  };
+}
 
 function extractText(node, fallback = '') {
   return (node?.textContent || fallback).trim();
@@ -628,8 +641,8 @@ async function fillFinalSubmitStep(state) {
 
 async function runServiceDelayAutofill() {
   const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
-  const tierService = TierService.fromSettings(settings || {});
-  if (!tierService.canAutoFill() || !sdrAutofillState?.active) return;
+  const tierService = getTierCapabilities(settings || {});
+  if (!tierService.canAutoFill || !sdrAutofillState?.active) return;
 
   const inCardSelection = Boolean(document.querySelector('#oysterCardId'));
   const inJourneyDetails = Boolean(document.querySelector('#tflNetworkLine'));
@@ -671,9 +684,9 @@ async function startServiceDelayWorkflow(journeys) {
   }
 
   const { settings } = await chrome.storage.local.get('settings');
-  const tierService = TierService.fromSettings(settings || {});
+  const tierService = getTierCapabilities(settings || {});
 
-  if (tierService.canAutoFill()) {
+  if (tierService.canAutoFill) {
     await chrome.storage.local.set({
       [CLAIM_AUTOFILL_STORAGE_KEY]: {
         active: true,
@@ -691,7 +704,7 @@ async function startServiceDelayWorkflow(journeys) {
   }
 
   serviceDelayLink.click();
-  return { ok: true, queued: journeys.length, requiresManualClick: true, canAutoFill: tierService.canAutoFill() };
+  return { ok: true, queued: journeys.length, requiresManualClick: true, canAutoFill: tierService.canAutoFill };
 }
 
 async function processBatchStateAfterLoad() {
@@ -837,8 +850,8 @@ function injectTfLHelperPanel() {
 
   if (window.location.pathname.toLowerCase().includes('/oyster/sdr')) {
     chrome.storage.local.get('settings').then(({ settings }) => {
-      const tierService = TierService.fromSettings(settings || {});
-      if (tierService.canAutoFill()) {
+      const tierService = getTierCapabilities(settings || {});
+      if (tierService.canAutoFill) {
         updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
       } else {
         updateStatusPanel('Service delay refunds page detected', 'Upgrade to enable automatic form filling.');
@@ -854,8 +867,8 @@ async function analyseJourneyTable() {
   const parsedJourneys = parseJourneyRows();
   const eligibleJourneys = getEligibleJourneys(parsedJourneys);
   const { settings } = await chrome.storage.local.get('settings');
-  const tierService = TierService.fromSettings(settings || {});
-  const visibleEligible = tierService.canAccessFullHistory()
+  const tierService = getTierCapabilities(settings || {});
+  const visibleEligible = tierService.canAccessFullHistory
     ? eligibleJourneys
     : eligibleJourneys.filter((journey) => isWithinHistoryDays(journey.journeyDate, 7));
 
@@ -866,7 +879,7 @@ async function analyseJourneyTable() {
   });
 
   const total = estimateSummaryTotal(visibleEligible).toFixed(2);
-  if (tierService.isPaid()) {
+  if (tierService.isPaid) {
     updateStatusPanel('Eligible journeys ready', `Eligible claims: ${visibleEligible.length} · Est. refund: £${total} · Submission progress state: Ready`);
   } else {
     updateStatusPanel('Eligible journeys ready', `Eligible journeys: ${visibleEligible.length}. Upgrade to enable automatic form filling.`);
@@ -917,8 +930,8 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
 (async () => {
   const { settings } = await chrome.storage.local.get('settings');
-  const tierService = TierService.fromSettings(settings || {});
-  const autoDetect = tierService.isPaid() && settings?.autoDetectOnLoad;
+  const tierService = getTierCapabilities(settings || {});
+  const autoDetect = tierService.isPaid && settings?.autoDetectOnLoad;
 
   if (isTfLJourneyHistoryPage()) {
     await processBatchStateAfterLoad();
