@@ -85,21 +85,11 @@ h2 {
   color: var(--text-muted);
 }
 
-.tier-stack {
-  display: grid;
-  gap: 4px;
-  margin-top: 8px;
-}
-
 .tier-mode {
   margin: 0;
   font-size: 0.76rem;
   font-weight: 600;
   color: #2e4f7f;
-}
-
-.actual-tier {
-  color: var(--primary);
 }
 
 .ad-banner {
