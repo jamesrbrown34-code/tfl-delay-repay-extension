@@ -195,9 +195,30 @@ function isMyOysterCardsPage() {
   return headingText === 'my oyster cards' || path.includes('/myoystercards');
 }
 
+
+
+
+function isMyAccountHeaderVisible() {
+  const header = document.querySelector('#main-header');
+  if (!header) return false;
+
+  const heading = header.querySelector('#headingsimplelayout-pageheading, h1');
+  const headingText = (heading?.textContent || '').trim().toLowerCase();
+  return headingText === 'my account';
+}
+
+function isContactlessDashboardPage() {
+  const host = window.location.hostname.toLowerCase();
+  const path = window.location.pathname.toLowerCase();
+  if (host !== 'contactless.tfl.gov.uk') return false;
+
+  const isDashboardPath = path === '/dashboard' || path === '/dashboard/';
+  return isDashboardPath && isMyAccountHeaderVisible();
+}
+
 function isExpectedTfLPage() {
   const path = window.location.pathname.toLowerCase();
-  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || path.includes('/oyster/sdr');
+  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || isContactlessDashboardPage() || path.includes('/oyster/sdr');
 }
 
 function getReadableWorkflowStage(stage = '') {
@@ -234,6 +255,20 @@ function ensureStatusPanel() {
   panel.innerHTML = '<strong>TubeRefund</strong><div id="tfl-delay-helper-panel-status" style="margin-top:4px;line-height:1.4"></div>';
   document.body.appendChild(panel);
   return panel;
+}
+
+function formatManualUploadStatus(payload) {
+  const journeys = Array.isArray(payload?.journeys) ? payload.journeys : [];
+  if (!journeys.length) return 'No eligible journeys for manual upload saved yet. Run Full Flow from the extension popup.';
+
+  const savedAt = payload?.savedAt ? new Date(payload.savedAt).toLocaleString() : 'unknown time';
+  const preview = journeys
+    .slice(0, 2)
+    .map((journey) => `${journey.from} → ${journey.to} (${journey.journeyDate})`)
+    .join(' · ');
+
+  const extraCount = journeys.length > 2 ? ` +${journeys.length - 2} more` : '';
+  return `Eligible Journeys For Manual Upload: ${journeys.length} saved at ${savedAt}. ${preview}${extraCount}`;
 }
 
 function updateStatusPanel(status, detail = '') {
@@ -700,7 +735,9 @@ async function startServiceDelayWorkflow(journeys) {
     updateStatusPanel('Starting service delay workflow', `Queued ${journeys.length} journey(s) for auto-fill.`);
   } else {
     await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
-    updateStatusPanel('Service delay refunds opened', 'Upgrade to enable automatic form filling. Continue manually on this page.');
+    const { eligibleJourneysForManualUpload } = await chrome.storage.local.get('eligibleJourneysForManualUpload');
+    const manualDetail = formatManualUploadStatus(eligibleJourneysForManualUpload);
+    updateStatusPanel('Service delay refunds opened', `Upgrade to enable automatic form filling. Continue manually on this page.<br><span style="opacity:0.95">${manualDetail}</span>`);
   }
 
   serviceDelayLink.click();
@@ -843,6 +880,11 @@ function injectTfLHelperPanel() {
     return;
   }
 
+  if (isContactlessDashboardPage()) {
+    updateStatusPanel('Dashboard detected', 'Please Select An Oyster Card.');
+    return;
+  }
+
   if (isTfLJourneyHistoryPage()) {
     updateStatusPanel('Ready on Journey history', 'Waiting for collection/analyse command from the extension popup.');
     return;
@@ -854,7 +896,10 @@ function injectTfLHelperPanel() {
       if (tierService.canAutoFill) {
         updateStatusPanel('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
       } else {
-        updateStatusPanel('Service delay refunds page detected', 'Upgrade to enable automatic form filling.');
+        chrome.storage.local.get('eligibleJourneysForManualUpload').then(({ eligibleJourneysForManualUpload }) => {
+          const detail = `Upgrade to enable automatic form filling.<br><span style="opacity:0.95">${formatManualUploadStatus(eligibleJourneysForManualUpload)}</span>`;
+          updateStatusPanel('Service delay refunds page detected', detail);
+        });
       }
     });
     return;

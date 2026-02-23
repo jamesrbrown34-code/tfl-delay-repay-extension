@@ -12,6 +12,7 @@
         <h1>TubeRefund</h1>
         <p class="subtitle">Collect, analyse, and submit eligible delay journeys in one flow.</p>
         <p class="tier-mode" id="currentTierLabel">Testing Tier Mode: Free</p>
+        <p class="tier-mode actual-tier" id="actualTierLabel">Actual Tier: Free</p>
       </header>
 
       <section class="controls">
@@ -41,6 +42,18 @@
           <input id="autoDetectToggle" type="checkbox" />
           Paid: Auto-detect on page load
         </label>
+
+        <fieldset class="tier-toggle" id="manualTokenGroup">
+          <legend>Manual Paid Token (MVP)</legend>
+          <label for="tokenInput">Paste token</label>
+          <input id="tokenInput" type="text" placeholder="Base64 token" />
+          <button id="tokenSubmitButton" type="button">Activate Paid Tier</button>
+          <div class="token-actions">
+            <button id="generateTestTokenButton" type="button" class="secondary token-mini" title="Generate Test Token" aria-label="Generate Test Token">Gen</button>
+            <button id="deleteTestTokenButton" type="button" class="danger token-mini" title="Delete Test Token" aria-label="Delete Test Token">Del</button>
+          </div>
+          <p id="tokenMessage" aria-live="polite"></p>
+        </fieldset>
       </section>
 
       <section class="summary" id="summaryBox">
@@ -50,6 +63,13 @@
       <section>
         <h2>Eligible Journeys</h2>
         <div id="journeysList" class="journeys-list"></div>
+      </section>
+
+      <section>
+        <h2>Eligible Journeys For Manual Upload</h2>
+        <p class="subtitle">Stored locally for free-tier manual upload.</p>
+        <div id="eligibleJourneysForManualUploadMeta" class="manual-upload-meta"></div>
+        <div id="eligibleJourneysForManualUploadList" class="journeys-list"></div>
       </section>
       <aside id="adBanner" class="ad-banner">
         <strong>Ad:</strong> Upgrade to premium for auto-detection, monthly summaries, and no ads.

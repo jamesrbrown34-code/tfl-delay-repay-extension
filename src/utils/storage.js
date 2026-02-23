@@ -16,11 +16,18 @@ export async function getSettings() {
     ...(stored.settings || {})
   };
 
-  const tierService = TierService.fromSettings(merged);
+  const manualTokenTierService = new TierService('free');
+  await manualTokenTierService.initialize();
+
+  const persistedTierService = TierService.fromSettings(merged);
+  const effectiveTierService = manualTokenTierService.isPaid()
+    ? new TierService('paid')
+    : persistedTierService;
+
   return {
     ...merged,
-    tier: tierService.getCurrentTier(),
-    isPaidTier: tierService.isPaid()
+    tier: effectiveTierService.getCurrentTier(),
+    isPaidTier: effectiveTierService.isPaid()
   };
 }
 
