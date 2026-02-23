@@ -238,7 +238,7 @@ function ensureStatusPanel() {
 
 function formatManualUploadStatus(payload) {
   const journeys = Array.isArray(payload?.journeys) ? payload.journeys : [];
-  if (!journeys.length) return 'No eligibleJourneysForManualUpload saved yet. Run Full Flow from the extension popup.';
+  if (!journeys.length) return 'No eligible journeys for manual upload saved yet. Run Full Flow from the extension popup.';
 
   const savedAt = payload?.savedAt ? new Date(payload.savedAt).toLocaleString() : 'unknown time';
   const preview = journeys
@@ -247,7 +247,7 @@ function formatManualUploadStatus(payload) {
     .join(' · ');
 
   const extraCount = journeys.length > 2 ? ` +${journeys.length - 2} more` : '';
-  return `eligibleJourneysForManualUpload: ${journeys.length} saved at ${savedAt}. ${preview}${extraCount}`;
+  return `Eligible Journeys For Manual Upload: ${journeys.length} saved at ${savedAt}. ${preview}${extraCount}`;
 }
 
 function updateStatusPanel(status, detail = '') {

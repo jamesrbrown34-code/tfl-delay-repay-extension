@@ -180,7 +180,7 @@ function renderSummary(journeys, tierService, manualUploadPayload = null) {
   summaryBox.innerHTML = `
     <p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p>
     <p>Free tier is limited to the last 7 days. Upgrade to enable automatic form filling.</p>
-    <p><strong>eligibleJourneysForManualUpload:</strong> ${storedCount} stored · Last saved: <strong>${savedAtText}</strong></p>
+    <p><strong>Eligible Journeys For Manual Upload:</strong> ${storedCount} stored · Last saved: <strong>${savedAtText}</strong></p>
   `;
 }
 
