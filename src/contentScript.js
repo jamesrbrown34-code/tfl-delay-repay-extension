@@ -196,18 +196,18 @@ function isMyOysterCardsPage() {
 }
 
 
-function isDashboardWithMyOysterCardsVisible() {
+
+function isContactlessDashboardPage() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
-  if (host !== 'contactless.tfl.gov.uk' || path !== '/dashboard') return false;
+  if (host !== 'contactless.tfl.gov.uk') return false;
 
-  const pageText = (document.body?.innerText || '').toLowerCase();
-  return pageText.includes('my account') && pageText.includes('my oyster cards');
+  return path === '/dashboard' || path === '/dashboard/';
 }
 
 function isExpectedTfLPage() {
   const path = window.location.pathname.toLowerCase();
-  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || isDashboardWithMyOysterCardsVisible() || path.includes('/oyster/sdr');
+  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || isContactlessDashboardPage() || path.includes('/oyster/sdr');
 }
 
 function getReadableWorkflowStage(stage = '') {
@@ -869,7 +869,7 @@ function injectTfLHelperPanel() {
     return;
   }
 
-  if (isDashboardWithMyOysterCardsVisible()) {
+  if (isContactlessDashboardPage()) {
     updateStatusPanel('Dashboard detected', 'Please Select An Oyster Card.');
     return;
   }
