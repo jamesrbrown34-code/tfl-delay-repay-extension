@@ -213,7 +213,7 @@ function isContactlessDashboardPage() {
   if (host !== 'contactless.tfl.gov.uk') return false;
 
   const isDashboardPath = path === '/dashboard' || path === '/dashboard/';
-  return isDashboardPath && isMyAccountHeaderVisible();
+  return isDashboardPath || isMyAccountHeaderVisible();
 }
 
 function isExpectedTfLPage() {
