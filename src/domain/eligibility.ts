@@ -19,7 +19,9 @@ export function isWithinClaimWindow(journeyDate: string, now = new Date()): bool
 
 export function evaluateEligibility(journey: Journey, now = new Date()): EligibilityDecision {
   const reasons: string[] = [];
-  if (journey.delayMinutes < MIN_DELAY_MINUTES) reasons.push('Delay under minimum threshold');
+  if (!Number.isFinite(journey.delayMinutes) || journey.delayMinutes < MIN_DELAY_MINUTES) {
+    reasons.push('Delay under minimum threshold');
+  }
   if (!isWithinClaimWindow(journey.journeyDate, now)) reasons.push('Outside claim window');
   if (isConcessionFare(journey.ticketType)) reasons.push('Concession fare is excluded');
 
