@@ -150,10 +150,12 @@ textarea {
 
 
 .token-actions {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 6px;
+  margin-top: 6px;
 }
 
 .token-actions button {
-  flex: 1;
+  width: 100%;
 }
