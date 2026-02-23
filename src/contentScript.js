@@ -197,12 +197,23 @@ function isMyOysterCardsPage() {
 
 
 
+
+function isMyAccountHeaderVisible() {
+  const header = document.querySelector('#main-header');
+  if (!header) return false;
+
+  const heading = header.querySelector('#headingsimplelayout-pageheading, h1');
+  const headingText = (heading?.textContent || '').trim().toLowerCase();
+  return headingText === 'my account';
+}
+
 function isContactlessDashboardPage() {
   const host = window.location.hostname.toLowerCase();
   const path = window.location.pathname.toLowerCase();
   if (host !== 'contactless.tfl.gov.uk') return false;
 
-  return path === '/dashboard' || path === '/dashboard/';
+  const isDashboardPath = path === '/dashboard' || path === '/dashboard/';
+  return isDashboardPath && isMyAccountHeaderVisible();
 }
 
 function isExpectedTfLPage() {
