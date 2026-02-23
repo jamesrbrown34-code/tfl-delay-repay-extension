@@ -75,4 +75,21 @@ describe('eligibility', () => {
     expect(decision.eligible).toBe(false);
     expect(decision.reasons).toContain('Delay under minimum threshold');
   });
+
+  it('accumulates every rejection reason when multiple policy checks fail', () => {
+    const result = evaluateEligibility(
+      buildJourney({ journeyDate: '2024-01-01', delayMinutes: MIN_DELAY_MINUTES - 5, ticketType: '60+ Oyster Card' }),
+      now
+    );
+
+    expect(result).toEqual({
+      eligible: false,
+      reasons: ['Delay under minimum threshold', 'Outside claim window', 'Concession fare is excluded']
+    });
+  });
+
+  it('handles mixed-case concession strings with surrounding whitespace', () => {
+    expect(isConcessionFare('   fReEdOm PaSs holder  ')).toBe(true);
+  });
+
 });

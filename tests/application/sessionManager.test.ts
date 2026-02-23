@@ -23,6 +23,15 @@ function gatewayFactory(overrides: Partial<{
 }
 
 describe('SessionManager', () => {
+
+  it('returns a defensive copy from getState', () => {
+    const manager = new SessionManager(gatewayFactory());
+    const snapshot = manager.getState();
+
+    snapshot.authenticated = true;
+    expect(manager.getState().authenticated).toBe(false);
+  });
+
   it('sets authenticated state immediately when 2FA is not required', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2025-04-10T10:00:00.000Z'));
@@ -120,4 +129,38 @@ describe('SessionManager', () => {
     await expect(manager.logout()).rejects.toThrow('logout failed');
     expect(manager.getState().authenticated).toBe(true);
   });
+
+  it('does not call submit2FA gateway if no challenge is pending', async () => {
+    const gateway = gatewayFactory();
+    const manager = new SessionManager(gateway);
+
+    await expect(manager.verify2FA('123456')).rejects.toThrow('2FA challenge not pending');
+    expect(gateway.submit2FA).not.toHaveBeenCalled();
+  });
+
+  it('keeps pending 2FA state after an invalid verification attempt', async () => {
+    const gateway = gatewayFactory({ submit2FA: async () => ({ success: false, ttlSeconds: 999 }) });
+    const manager = new SessionManager(gateway);
+
+    await manager.startLogin({ username: 'x', password: 'y' });
+    await expect(manager.verify2FA('bad')).rejects.toThrow('Invalid 2FA code');
+
+    expect(manager.getState()).toEqual({ authenticated: false, pending2FA: true, expiresAt: null });
+  });
+
+  it('does not mutate authenticated state when startLogin throws', async () => {
+    const manager = new SessionManager(
+      gatewayFactory({
+        beginLogin: async (username) => {
+          if (username === 'good') return { requires2FA: false };
+          throw new Error('gateway exploded');
+        }
+      })
+    );
+
+    await manager.startLogin({ username: 'good', password: 'pw' });
+    await expect(manager.startLogin({ username: 'bad', password: 'pw' })).rejects.toThrow('gateway exploded');
+    expect(manager.getState().authenticated).toBe(true);
+  });
+
 });

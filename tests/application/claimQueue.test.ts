@@ -26,6 +26,7 @@ describe('ClaimQueue', () => {
     const processed = [await queue.processNext(), await queue.processNext(), await queue.processNext()];
 
     expect(processed.map((claim) => claim?.journeyId)).toEqual(createdClaims.map((claim) => claim.journeyId));
+    expect(processed.every((claim) => claim?.status === 'submitted')).toBe(true);
     expect(queue.size()).toBe(0);
   });
 
@@ -82,6 +83,30 @@ describe('ClaimQueue', () => {
     expect(backend.updateClaimStatus).toHaveBeenCalledTimes(1);
   });
 
+  it('continues processing next claim after an earlier failure removed from head', async () => {
+    const backend = {
+      enqueueClaim: vi
+        .fn()
+        .mockRejectedValueOnce(new Error('transient failure'))
+        .mockResolvedValueOnce(undefined),
+      updateClaimStatus: vi.fn().mockResolvedValue(undefined)
+    };
+    const queue = new ClaimQueue(backend, logger);
+
+    queue.enqueueJourneys([
+      buildJourney({ from: 'A', to: 'B' }),
+      buildJourney({ from: 'C', to: 'D' })
+    ]);
+
+    await expect(queue.processNext()).rejects.toThrow('transient failure');
+    expect(queue.size()).toBe(1);
+
+    const second = await queue.processNext();
+    expect(second?.status).toBe('submitted');
+    expect(second?.journeyId).toContain('C-D');
+    expect(queue.size()).toBe(0);
+  });
+
   it('supports state reset by draining queue fully', async () => {
     const backend = createBackend();
     const queue = new ClaimQueue(backend, logger);
@@ -93,6 +118,18 @@ describe('ClaimQueue', () => {
 
     expect(queue.size()).toBe(0);
     await expect(queue.processNext()).resolves.toBeNull();
+  });
+
+  it('logs queue counts on every enqueue batch', () => {
+    const backend = createBackend();
+    const localLogger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+    const queue = new ClaimQueue(backend, localLogger);
+
+    queue.enqueueJourneys(buildJourneys(2));
+    queue.enqueueJourneys(buildJourneys(3));
+
+    expect(localLogger.info).toHaveBeenNthCalledWith(1, 'Queued claims', { count: 2 });
+    expect(localLogger.info).toHaveBeenNthCalledWith(2, 'Queued claims', { count: 3 });
   });
 
   it('is unaffected by tier switching mid-queue because queue is tier-agnostic', async () => {
