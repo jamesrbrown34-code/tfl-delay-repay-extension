@@ -20,15 +20,14 @@ import {
 import { SELECTORS } from './content/selectors.js';
 import { ServiceDelayWorkflow } from './content/workflow/serviceDelayWorkflow.js';
 import { StatusPanel } from './content/ui/statusPanel.js';
+import { detectPageType, PAGE_TYPES } from './content/pageDetector.js';
 
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
 const PENDING_COLLECT_STORAGE_KEY = 'pendingCollectFromMyCards';
 
 const statusPanel = new StatusPanel({
-  isExpectedTfLPage,
-  isMyOysterCardsPage,
-  isTfLJourneyHistoryPage
+  getPageType: detectPageType
 });
 
 function extractText(node, fallback = '') {
@@ -102,25 +101,6 @@ function parseJourneyRows() {
     .filter(Boolean);
 }
 
-function isTfLJourneyHistoryPage() {
-  const url = window.location.href.toLowerCase();
-  const host = window.location.hostname.toLowerCase();
-  const onTfLDomain = host === 'oyster.tfl.gov.uk' || host.endsWith('.tfl.gov.uk');
-
-  return onTfLDomain && /(journey-history|journeyhistory|journeys|history)/i.test(url);
-}
-
-function isMyOysterCardsPage() {
-  const heading = document.querySelector(SELECTORS.journeyHistory.pageHeading);
-  const headingText = (heading?.textContent || '').trim().toLowerCase();
-  const path = window.location.pathname.toLowerCase();
-  return headingText === 'my oyster cards' || path.includes('/myoystercards');
-}
-
-function isExpectedTfLPage() {
-  const path = window.location.pathname.toLowerCase();
-  return isTfLJourneyHistoryPage() || isMyOysterCardsPage() || path.includes('/oyster/sdr');
-}
 
 function getReadableWorkflowStage(stage = '') {
   const mapping = {
@@ -311,7 +291,7 @@ async function processBatchStateAfterLoad() {
 }
 
 async function startCollectLast28Days() {
-  if (isMyOysterCardsPage()) {
+  if (detectPageType() === PAGE_TYPES.MY_CARDS) {
     const journeyHistoryLink = document.querySelector(SELECTORS.journeyHistory.viewJourneyHistoryLink);
     if (!journeyHistoryLink) {
       return { ok: false, error: 'View journey history link not found on My Oyster cards page.' };
@@ -366,7 +346,7 @@ async function startCollectLast28Days() {
 async function startCollectFromPendingNavigation() {
   const { pendingCollectFromMyCards } = await chrome.storage.local.get(PENDING_COLLECT_STORAGE_KEY);
   if (!pendingCollectFromMyCards?.active) return;
-  if (!isTfLJourneyHistoryPage()) return;
+  if (detectPageType() !== PAGE_TYPES.JOURNEY_HISTORY) return;
 
   const select = document.querySelector(SELECTORS.journeyHistory.dateRangeSelect);
   const submitButton = document.querySelector(SELECTORS.journeyHistory.dateRangeSubmitButton);
@@ -399,7 +379,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   }
 
   if (message?.type === 'PING_PAGE_STATUS') {
-    sendResponse({ ok: true, isJourneyHistory: isTfLJourneyHistoryPage() });
+    sendResponse({ ok: true, isJourneyHistory: detectPageType() === PAGE_TYPES.JOURNEY_HISTORY });
   }
 
   if (message?.type === 'COLLECT_LAST_28_DAYS') {
@@ -434,25 +414,19 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   const { settings } = await chrome.storage.local.get('settings');
   const autoDetect = settings?.isPaidTier && settings?.autoDetectOnLoad;
 
-  if (isTfLJourneyHistoryPage()) {
+  const currentPageType = detectPageType();
+
+  if (currentPageType === PAGE_TYPES.JOURNEY_HISTORY) {
     await processBatchStateAfterLoad();
   }
 
   await startCollectFromPendingNavigation();
 
-  if (isExpectedTfLPage()) {
-    if (isMyOysterCardsPage()) {
-      statusPanel.showReadyState('my-oyster-cards');
-    } else if (isTfLJourneyHistoryPage()) {
-      statusPanel.showReadyState('journey-history');
-    } else if (window.location.pathname.toLowerCase().includes('/oyster/sdr')) {
-      statusPanel.showReadyState('service-delay-refunds');
-    } else {
-      statusPanel.showReadyState('default');
-    }
+  if (currentPageType !== PAGE_TYPES.UNKNOWN) {
+    statusPanel.showReadyState(currentPageType);
   }
 
-  if (autoDetect && isTfLJourneyHistoryPage()) {
+  if (autoDetect && currentPageType === PAGE_TYPES.JOURNEY_HISTORY) {
     await analyseJourneyTable();
   }
 

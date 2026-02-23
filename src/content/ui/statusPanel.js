@@ -1,20 +1,13 @@
 import { SELECTORS } from '../selectors.js';
+import { PAGE_TYPES } from '../pageDetector.js';
 
 export class StatusPanel {
-  constructor({
-    isExpectedTfLPage,
-    isMyOysterCardsPage,
-    isTfLJourneyHistoryPage,
-    pathnameProvider = () => window.location.pathname.toLowerCase()
-  }) {
-    this.isExpectedTfLPage = isExpectedTfLPage;
-    this.isMyOysterCardsPage = isMyOysterCardsPage;
-    this.isTfLJourneyHistoryPage = isTfLJourneyHistoryPage;
-    this.pathnameProvider = pathnameProvider;
+  constructor({ getPageType }) {
+    this.getPageType = getPageType;
   }
 
   ensure() {
-    if (!this.isExpectedTfLPage()) return null;
+    if (this.getPageType() === PAGE_TYPES.UNKNOWN) return null;
 
     let panel = document.querySelector(SELECTORS.navigation.helperPanel);
     if (panel) return panel;
@@ -48,17 +41,17 @@ export class StatusPanel {
   }
 
   showReadyState(pageType) {
-    if (pageType === 'my-oyster-cards') {
+    if (pageType === PAGE_TYPES.MY_CARDS) {
       this.update('Ready on My Oyster cards', 'Use Run full flow in the extension popup to open journey history and begin collection.');
       return;
     }
 
-    if (pageType === 'journey-history') {
+    if (pageType === PAGE_TYPES.JOURNEY_HISTORY) {
       this.update('Ready on Journey history', 'Waiting for collection/analyse command from the extension popup.');
       return;
     }
 
-    if (pageType === 'service-delay-refunds') {
+    if (pageType === PAGE_TYPES.SERVICE_DELAY) {
       this.update('Service delay refunds page detected', 'Auto-fill will continue while this tab remains open.');
       return;
     }
