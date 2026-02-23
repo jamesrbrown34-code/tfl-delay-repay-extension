@@ -56,7 +56,7 @@ export class PopupController {
   async runPaidFlow(journeys: Journey[]): Promise<void> {
     if (!this.tierService.canAutoFill()) {
       await this.eligibleJourneyStore.save(journeys);
-      this.statusPanel.setStatus('Free tier: auto-submit unavailable. Eligible journeys saved for manual upload.');
+      this.statusPanel.setStatus(`Free tier: auto-submit unavailable. Eligible journeys saved for manual upload (${journeys.length} journey${journeys.length === 1 ? '' : 's'}).`);
       return;
     }
 

@@ -61,7 +61,9 @@ describe('PopupController', () => {
 
     expect(save).toHaveBeenCalledWith(journeys);
     expect(queue.enqueueJourneys).not.toHaveBeenCalled();
-    expect(document.getElementById('summaryBox')?.textContent).toContain('saved for manual upload');
+    const summaryText = document.getElementById('summaryBox')?.textContent || '';
+    expect(summaryText).toContain('saved for manual upload');
+    expect(summaryText).toContain('(2 journeys)');
   });
 
   it('processes queue end-to-end for paid tier and does not save manual upload payload', async () => {

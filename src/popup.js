@@ -24,6 +24,7 @@ let currentEligible = [];
 let testModeEnabled = false;
 let testModeRealJourneysEnabled = false;
 let currentTierService = new TierService('free');
+let currentManualUploadPayload = null;
 const manualTokenTierService = new TierService('free');
 
 function setTokenMessage(text, isError = false) {
@@ -100,7 +101,8 @@ function renderStoredEligibleJourneys(payload) {
 
 async function refreshEligibleJourneysForManualUpload() {
   const stored = await chrome.storage.local.get(ELIGIBLE_JOURNEYS_STORAGE_KEY);
-  renderStoredEligibleJourneys(stored[ELIGIBLE_JOURNEYS_STORAGE_KEY]);
+  currentManualUploadPayload = stored[ELIGIBLE_JOURNEYS_STORAGE_KEY] || null;
+  renderStoredEligibleJourneys(currentManualUploadPayload);
 }
 
 function renderJourneys(journeys) {
@@ -124,14 +126,23 @@ function renderJourneys(journeys) {
   journeysList.append(...cards);
 }
 
-function renderSummary(journeys, tierService) {
+function renderSummary(journeys, tierService, manualUploadPayload = null) {
   const total = estimateTotalRefund(journeys).toFixed(2);
   if (tierService.isPaid()) {
     summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible claims · Estimated total refund: <strong>£${total}</strong> · Submission progress state: <strong>Ready</strong></p>`;
     return;
   }
 
-  summaryBox.innerHTML = `<p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p><p>Upgrade to enable automatic form filling.</p>`;
+  const storedCount = Array.isArray(manualUploadPayload?.journeys) ? manualUploadPayload.journeys.length : 0;
+  const savedAtText = manualUploadPayload?.savedAt
+    ? new Date(manualUploadPayload.savedAt).toLocaleString()
+    : 'Not saved yet';
+
+  summaryBox.innerHTML = `
+    <p><strong>${journeys.length}</strong> eligible journeys in the last 7 days · Estimated total refund: <strong>£${total}</strong></p>
+    <p>Upgrade to enable automatic form filling.</p>
+    <p><strong>eligibleJourneysForManualUpload:</strong> ${storedCount} stored · Last saved: <strong>${savedAtText}</strong></p>
+  `;
 }
 
 function renderWorkflowTracker(state, tierService) {
@@ -350,7 +361,7 @@ runFullFlowButton.addEventListener('click', async () => {
       await persistEligibleJourneysForManualUpload(currentEligible);
     }
     renderJourneys(currentEligible);
-    renderSummary(currentEligible, currentTierService);
+    renderSummary(currentEligible, currentTierService, currentManualUploadPayload);
 
     if (usedBatchData) {
       summaryBox.innerHTML += '<p>Using aggregated journeys from auto-cycled collection.</p>';
