@@ -18,6 +18,7 @@ import {
   parseTimeRangeStart
 } from './core/timeUtils.js';
 import { SELECTORS } from './content/selectors.js';
+import { ServiceDelayWorkflow } from './content/workflow/serviceDelayWorkflow.js';
 
 const MIN_DELAY_MINUTES = 15;
 const CLAIM_AUTOFILL_STORAGE_KEY = 'sdrAutofillState';
@@ -228,187 +229,6 @@ function setSelectValue(select, value) {
   return true;
 }
 
-function ensureOysterCardTypeSelected() {
-  const oysterCardRadio = document.querySelector(SELECTORS.serviceDelayForm.oysterCardTypeRadio);
-  if (!oysterCardRadio) return false;
-
-  const oysterCardLabel = document.querySelector(SELECTORS.serviceDelayForm.oysterCardTypeLabel);
-  if (oysterCardLabel) oysterCardLabel.click();
-  oysterCardRadio.click();
-  oysterCardRadio.checked = true;
-  oysterCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
-  oysterCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
-  return true;
-}
-
-function getFirstOysterCardOption(select) {
-  return Array.from(select.options || []).find((option) => option.value && option.value !== 'UNATTACHED_CARD') || null;
-}
-
-function findNextButtonByText(labelText) {
-  return Array.from(document.querySelectorAll(SELECTORS.buttons.submitControls)).find((element) => {
-    const text = (element.textContent || element.value || '').toLowerCase().trim();
-    return text === labelText.toLowerCase();
-  });
-}
-
-function logTestMode(event, details = {}) {
-  if (!details?.settings?.testMode && !details?.settings?.testModeRealJourneys) return;
-  const timestamp = new Date().toISOString();
-  console.log(`[SDR test mode] ${event}`, {
-    timestamp,
-    ...details
-  });
-}
-
-function findFinalSubmitButton() {
-  const byValue = document.querySelector(SELECTORS.buttons.finalSubmitByValue);
-  if (byValue) return byValue;
-
-  return Array.from(document.querySelectorAll(SELECTORS.buttons.submitControls)).find((element) => {
-    const text = (element.textContent || element.value || '').toLowerCase().trim();
-    return text === 'submit';
-  }) || null;
-}
-
-async function fillCardSelectionStep(state, settings) {
-  ensureOysterCardTypeSelected();
-
-  const cardSelect = document.querySelector(SELECTORS.serviceDelayForm.oysterCardSelect);
-  if (!cardSelect) return false;
-
-  const preferredCardId = settings?.serviceDelayCardId;
-  if (preferredCardId) {
-    setSelectValue(cardSelect, preferredCardId);
-  } else if (!cardSelect.value) {
-    const firstCard = getFirstOysterCardOption(cardSelect);
-    if (firstCard) {
-      cardSelect.value = firstCard.value;
-      cardSelect.dispatchEvent(new Event('change', { bubbles: true }));
-    }
-  }
-
-  const nextPageButton = document.querySelector(SELECTORS.buttons.submitButton) || findNextButtonByText('next page');
-  if (!nextPageButton) return false;
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'journey-details'
-    }
-  });
-
-  setTimeout(() => nextPageButton.click(), 250);
-  return true;
-}
-
-function fillJourneyDetailsForm(journey, settings) {
-  const lineSelect = document.querySelector(SELECTORS.serviceDelayForm.networkLineSelect);
-  const startSelect = document.querySelector(SELECTORS.serviceDelayForm.startStationSelect);
-  const endSelect = document.querySelector(SELECTORS.serviceDelayForm.endStationSelect);
-  const dateInput = document.querySelector(SELECTORS.serviceDelayForm.journeyStartDateInput);
-  const hourSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyStartHourSelect);
-  const minuteSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyStartMinuteSelect);
-  const endDateInput = document.querySelector(SELECTORS.serviceDelayForm.journeyEndDateInput);
-  const endHourSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyEndHourSelect);
-  const endMinuteSelect = document.querySelector(SELECTORS.serviceDelayForm.journeyEndMinuteSelect);
-  const delayHourSelect = document.querySelector(SELECTORS.serviceDelayForm.delayHourSelect);
-  const delayMinuteSelect = document.querySelector(SELECTORS.serviceDelayForm.delayMinuteSelect);
-
-  if (!lineSelect || !startSelect || !endSelect || !dateInput || !hourSelect || !minuteSelect || !endDateInput || !endHourSelect || !endMinuteSelect || !delayHourSelect || !delayMinuteSelect) {
-    return { ok: false, error: 'Service delay form fields were not found.' };
-  }
-
-  const selectedLine = settings?.serviceDelayNetworkLine || 'UNDERGROUND';
-  setSelectValue(lineSelect, selectedLine);
-
-  const startMatched = selectOptionByText(startSelect, journey.from);
-  const endMatched = selectOptionByText(endSelect, journey.to);
-
-  if (!startMatched || !endMatched) {
-    return { ok: false, error: `Could not map station(s) for journey ${journey.from} → ${journey.to}.` };
-  }
-
-  dateInput.value = formatJourneyDate(journey.journeyDate);
-  dateInput.dispatchEvent(new Event('input', { bubbles: true }));
-  dateInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-  const startTime = extractTimeFromJourneyDate(journey);
-  const startHour = startTime.hours;
-  const startMinute = startTime.mins;
-  setSelectValue(hourSelect, startHour);
-  setSelectValue(minuteSelect, startMinute);
-
-  endDateInput.value = formatJourneyDate(journey.journeyDate);
-  endDateInput.dispatchEvent(new Event('input', { bubbles: true }));
-  endDateInput.dispatchEvent(new Event('change', { bubbles: true }));
-
-  const endTime = extractEndTimeFromJourney(journey);
-  setSelectValue(endHourSelect, endTime.hours);
-  setSelectValue(endMinuteSelect, endTime.mins);
-
-  const bufferedDelay = calculateDelayWithBuffer(journey.delayMinutes);
-  setSelectValue(delayHourSelect, String(bufferedDelay.hours).padStart(2, '0'));
-  setSelectValue(delayMinuteSelect, bufferedDelay.mins);
-
-  return { ok: true };
-}
-
-async function fillJourneyDetailsStep(state) {
-  const journey = state?.queue?.[0];
-  if (!journey) {
-    await chrome.storage.local.remove(CLAIM_AUTOFILL_STORAGE_KEY);
-    return { ok: false, error: 'No journeys left to submit.' };
-  }
-
-  const { settings } = await chrome.storage.local.get('settings');
-  const fillResult = fillJourneyDetailsForm(journey, settings);
-  if (!fillResult.ok) return fillResult;
-
-  const nextPageButton = document.querySelector(SELECTORS.buttons.submitButton) || findNextButtonByText('next page');
-  if (!nextPageButton) return { ok: false, error: 'Next Page button was not found on journey details form.' };
-
-  const remaining = state.queue.slice(1);
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      queue: remaining,
-      completed: [...(state.completed || []), journey],
-      stage: remaining.length ? 'card-selection' : 'completed',
-      lastSubmittedAt: new Date().toISOString()
-    }
-  });
-
-  setTimeout(() => nextPageButton.click(), 250);
-  return {
-    ok: true,
-    submitted: journey,
-    remaining: remaining.length,
-    requiresManualClick: false
-  };
-}
-
-async function fillRefundTypeStep(state) {
-  const refundToCardRadio = document.querySelector(SELECTORS.serviceDelayForm.refundToCardRadio);
-  if (!refundToCardRadio) {
-    return { ok: false, error: 'Refund-to-card option was not found on page.' };
-  }
-
-  refundToCardRadio.checked = true;
-  refundToCardRadio.dispatchEvent(new Event('input', { bubbles: true }));
-  refundToCardRadio.dispatchEvent(new Event('change', { bubbles: true }));
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'refund-type-selected',
-      refundTypeSelectedAt: new Date().toISOString()
-    }
-  });
-
-  return { ok: true, selected: 'FUL' };
-}
-
 function showFinalSubmitManualNotice() {
   const existing = document.querySelector(SELECTORS.navigation.finalSubmitToast);
   if (existing) existing.remove();
@@ -430,57 +250,6 @@ function showFinalSubmitManualNotice() {
   setTimeout(() => {
     toast.remove();
   }, 5000);
-}
-
-async function fillFinalSubmitStep(state) {
-  const finalSubmitButton = findFinalSubmitButton();
-  if (!finalSubmitButton) return { ok: false, error: 'Final Submit button was not found.' };
-
-  updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-  showFinalSubmitManualNotice();
-
-  await chrome.storage.local.set({
-    [CLAIM_AUTOFILL_STORAGE_KEY]: {
-      ...state,
-      stage: 'awaiting-final-submit',
-      finalSubmitPromptedAt: new Date().toISOString()
-    }
-  });
-
-  return { ok: true, requiresManualClick: true, prompted: true };
-}
-
-async function runServiceDelayAutofill() {
-  const { sdrAutofillState, settings } = await chrome.storage.local.get([CLAIM_AUTOFILL_STORAGE_KEY, 'settings']);
-  if (!sdrAutofillState?.active) return;
-
-  const inCardSelection = Boolean(document.querySelector(SELECTORS.serviceDelayForm.oysterCardSelect));
-  const inJourneyDetails = Boolean(document.querySelector(SELECTORS.serviceDelayForm.networkLineSelect));
-  const inRefundTypeStep = Boolean(document.querySelector(SELECTORS.serviceDelayForm.refundToCardRadio));
-  const inFinalSubmitStep = Boolean(findFinalSubmitButton());
-
-  if (inCardSelection) {
-    updateStatusPanel(getReadableWorkflowStage('card-selection'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
-    await fillCardSelectionStep(sdrAutofillState, settings);
-    return;
-  }
-
-  if (inJourneyDetails) {
-    updateStatusPanel(getReadableWorkflowStage('journey-details'), `Submitted ${sdrAutofillState.completed?.length || 0}, remaining ${sdrAutofillState.queue?.length || 0}.`);
-    await fillJourneyDetailsStep(sdrAutofillState);
-    return;
-  }
-
-  if (inRefundTypeStep) {
-    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-    await fillRefundTypeStep(sdrAutofillState);
-    return;
-  }
-
-  if (inFinalSubmitStep) {
-    updateStatusPanel('Final step: manual submit required', 'Please click Submit on this page for a valid claim.');
-    await fillFinalSubmitStep(sdrAutofillState);
-  }
 }
 
 async function startServiceDelayWorkflow(journeys) {
@@ -725,5 +494,31 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     await analyseJourneyTable();
   }
 
-  await runServiceDelayAutofill();
+  const serviceDelayWorkflow = new ServiceDelayWorkflow(
+    {
+      get: (keys) => chrome.storage.local.get(keys),
+      set: (items) => chrome.storage.local.set(items),
+      remove: (keys) => chrome.storage.local.remove(keys)
+    },
+    {
+      query: (selector) => document.querySelector(selector),
+      queryAll: (selector) => document.querySelectorAll(selector),
+      createEvent: (type) => new Event(type, { bubbles: true }),
+      setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+      selectOptionByText,
+      setSelectValue,
+      formatJourneyDate,
+      extractTimeFromJourneyDate,
+      extractEndTimeFromJourney,
+      calculateDelayWithBuffer,
+      getReadableWorkflowStage,
+      claimAutofillStorageKey: CLAIM_AUTOFILL_STORAGE_KEY
+    },
+    {
+      update: updateStatusPanel,
+      showFinalSubmitManualNotice
+    }
+  );
+
+  await serviceDelayWorkflow.handlePage();
 })();
