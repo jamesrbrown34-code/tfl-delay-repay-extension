@@ -175,6 +175,9 @@ h2 {
 
 .button {
   border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 10px;
   cursor: pointer;
   min-height: 38px;
@@ -183,6 +186,10 @@ h2 {
   font-weight: 650;
   letter-spacing: 0.1px;
   transition: transform 120ms ease, box-shadow 140ms ease, background-color 140ms ease;
+}
+
+.button-link {
+  text-decoration: none;
 }
 
 .button-primary,
