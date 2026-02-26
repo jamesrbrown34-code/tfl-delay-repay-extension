@@ -1,0 +1,42 @@
+# Node modules
+node_modules/
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# Build output
+dist/
+build/
+out/
+*.js
+*.js.map
+*.d.ts
+
+# TypeScript
+*.tsbuildinfo
+
+# VSCode / IDE settings
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# MacOS / Windows system files
+.DS_Store
+Thumbs.db
+
+# Chrome extension specific
+*.crx
+*.pem
+
+# Local data / CSVs
+*.csv
+data/
+
+#test files
+coverage/
