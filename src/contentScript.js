@@ -109,66 +109,57 @@ function parseTimeRangeEnd(timeCell = '') {
 function parseJourneyRows() {
   const rows = Array.from(document.querySelectorAll('table tbody tr'));
   let currentDateLabel = null;
-
+  console.log(rows);
   return rows
     .map((row) => {
-      const cells = row.querySelectorAll('td');
-      if (!cells.length) return null;
 
-      if (cells.length >= 6) {
-        const expectedMinutes = Number(extractText(cells[3]));
-        const actualMinutes = Number(extractText(cells[4]));
-        const delayMinutes = Math.max(0, actualMinutes - expectedMinutes);
-
-        return {
-          journeyDate: extractText(cells[0]),
-          from: extractText(cells[1]),
-          to: extractText(cells[2]),
-          expectedMinutes,
-          actualMinutes,
-          delayMinutes,
-          delayEligible: delayMinutes >= MIN_DELAY_MINUTES,
-          ticketType: extractText(cells[5]),
-          delaySource: 'inferred',
-          zonesCrossed: Number(extractText(cells[6], '1')) || 1
-        };
-      }
-
-      if (cells.length >= 4) {
-        const firstCell = extractText(cells[0]);
-        const actionText = extractText(cells[1]);
-
-        const maybeDate = parseDateLabelToDdMmYyyy(firstCell);
-        if (maybeDate && !actionText.toLowerCase().includes(' to ')) {
-          currentDateLabel = maybeDate;
-          return null;
+      // 1️⃣ Detect date header row
+      if (row.classList.contains('day-date')) {
+        const dateCell = row.querySelector('td');
+        if (dateCell) {
+          currentDateLabel = dateCell.innerText.trim();
         }
-
-        const stationPair = parseStationPairFromAction(actionText);
-        if (!stationPair) return null;
-
-        if (/touch\s+(in|out)|bus journey/i.test(actionText)) return null;
-
-        const startTime = parseTimeRangeStart(firstCell);
-        const endTime = parseTimeRangeEnd(firstCell);
-
-        return {
-          journeyDate: currentDateLabel || firstCell,
-          from: stationPair.from,
-          to: stationPair.to,
-          expectedMinutes: null,
-          actualMinutes: null,
-          delayMinutes: MIN_DELAY_MINUTES,
-          delayEligible: true,
-          ticketType: 'PAYG',
-          delaySource: 'statement-journey-action',
-          zonesCrossed: 1,
-          startTime,
-          endTime
-        };
+        return null;
       }
 
-      return null;
+      // 2️⃣ Only process main journey rows
+      if (!row.classList.contains('reveal-table-row')) {
+        return null;
+      }
+
+      const dateCell = row.querySelector('.colDate');
+      const journeyCell = row.querySelector('.colJourney');
+
+      if (!dateCell || !journeyCell) return null;
+
+      const timeText = dateCell.innerText.trim(); // "17:07 - 17:35"
+      const actionText = journeyCell.innerText.trim(); // "Farringdon to Preston Road"
+
+      // Ignore non-journey actions just in case
+      if (!actionText.toLowerCase().includes(' to ')) return null;
+
+      const stationPair = parseStationPairFromAction(actionText);
+      if (!stationPair) return null;
+
+      const startTime = parseTimeRangeStart(timeText);
+      const endTime = parseTimeRangeEnd(timeText);
+
+      //TODO add logic to check
+
+      return {
+        journeyDate: currentDateLabel.split('\n')[0],
+        from: stationPair.from,
+        to: stationPair.to,
+        expectedMinutes: null,
+        actualMinutes: null,
+        delayMinutes: MIN_DELAY_MINUTES,
+        delayEligible: true,
+        ticketType: 'PAYG',
+        delaySource: 'statement-journey-action',
+        zonesCrossed: 1,
+        startTime,
+        endTime
+      };
     })
     .filter(Boolean);
 }
@@ -917,10 +908,31 @@ async function analyseJourneyTable() {
     ? eligibleJourneys
     : eligibleJourneys.filter((journey) => isWithinHistoryDays(journey.journeyDate, 7));
 
+  // Read existing storage first
+  const existing = await chrome.storage.local.get(['lastParsedJourneys', 'lastEligibleJourneys']);
+
+  // Merge or append your new data
+  const updatedParsedJourneys = [
+    ...(existing.lastParsedJourneys || []),
+    ...parsedJourneys
+  ];
+
+  const updatedEligibleJourneys = [
+    ...(existing.lastEligibleJourneys || []),
+    ...visibleEligible
+  ];
+
+  const updatedEligibleJourneysForManualUpload = [
+    ...(existing.eligibleJourneysForManualUpload || []),
+    ...visibleEligible
+  ];
+
+  // Save the merged data back
   await chrome.storage.local.set({
     lastAnalysedAt: new Date().toISOString(),
-    lastParsedJourneys: parsedJourneys,
-    lastEligibleJourneys: visibleEligible
+    lastParsedJourneys: updatedParsedJourneys,
+    lastEligibleJourneys: updatedEligibleJourneys,
+    eligibleJourneysForManualUpload: updatedEligibleJourneysForManualUpload,
   });
 
   const total = estimateSummaryTotal(visibleEligible).toFixed(2);
@@ -976,7 +988,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 (async () => {
   const { settings } = await chrome.storage.local.get('settings');
   const tierService = getTierCapabilities(settings || {});
-  const autoDetect = tierService.isPaid && settings?.autoDetectOnLoad;
+  //const autoDetect = tierService.isPaid && settings?.autoDetectOnLoad;
 
   if (isTfLJourneyHistoryPage()) {
     await processBatchStateAfterLoad();
@@ -986,7 +998,7 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
 
   injectTfLHelperPanel();
 
-  if (autoDetect && isTfLJourneyHistoryPage()) {
+  if (isTfLJourneyHistoryPage()) {
     await analyseJourneyTable();
   }
 
