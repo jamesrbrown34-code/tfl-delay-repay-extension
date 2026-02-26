@@ -16,7 +16,6 @@
   },
   "include": [
     "src/**/*.ts",
-    "tests/**/*.ts",
-    "tests/application/refundEngine.test.ts"
+    "tests/**/*.ts"
   ]
 }
